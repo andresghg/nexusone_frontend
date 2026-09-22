@@ -1,0 +1,116 @@
+'use client'
+
+import { useState, type FormEvent } from 'react'
+import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { AppLink, useAppNavigate } from '@/lib/router-adapter'
+
+/**
+ * Formulario de login — mock de autenticación (sin backend real todavía),
+ * mismo patrón que el resto de las páginas del prototipo (FacturacionPage,
+ * InventarioPage): UI completa y funcional, lista para conectar a un
+ * servicio de auth real sin cambiar de forma.
+ */
+export function LoginForm() {
+  const navigate = useAppNavigate()
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(null)
+
+    const form = new FormData(e.currentTarget)
+    const email = String(form.get('email') ?? '').trim()
+    const password = String(form.get('password') ?? '')
+
+    if (!email || !password) {
+      setError('Completá tu correo y contraseña para continuar.')
+      return
+    }
+
+    setLoading(true)
+    // Simulación de llamada a auth — reemplazar por el servicio real.
+    window.setTimeout(() => {
+      setLoading(false)
+      navigate('/')
+    }, 900)
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      {error && (
+        <div
+          role="alert"
+          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+        >
+          {error}
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <Label htmlFor="email">Correo electrónico</Label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          placeholder="nombre@empresa.com"
+          disabled={loading}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="password">Contraseña</Label>
+          <AppLink
+            href="/recuperar-contrasena"
+            className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+          >
+            ¿Olvidaste tu contraseña?
+          </AppLink>
+        </div>
+        <div className="relative">
+          <Input
+            id="password"
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
+            placeholder="••••••••"
+            disabled={loading}
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            disabled={loading}
+            aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+            className="absolute inset-y-0 right-0 flex w-9 items-center justify-center text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+          >
+            {showPassword ? (
+              <EyeOff className="size-4" aria-hidden />
+            ) : (
+              <Eye className="size-4" aria-hidden />
+            )}
+          </button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Checkbox id="remember" name="remember" disabled={loading} />
+        <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground">
+          Mantener sesión iniciada
+        </Label>
+      </div>
+
+      <Button type="submit" className="w-full" disabled={loading}>
+        {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
+        {loading ? 'Ingresando...' : 'Iniciar sesión'}
+      </Button>
+    </form>
+  )
+}
