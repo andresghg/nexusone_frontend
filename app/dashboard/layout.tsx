@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { DashboardShell } from '@/components/navigation/DashboardShell'
+import { DashboardShell } from '@/shared/components/navigation/DashboardShell'
 import { currentUserPermissions } from '@/config/navigation'
 
 /**

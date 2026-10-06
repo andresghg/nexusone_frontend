@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, type FormEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
+import { zodResolver } from "@hookform/resolvers/zod"
+import { Form, FormLabel , FormInput, FormSubmit, FormErrors } from "@/shared/components/forms"
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+import { Button } from '@/shared/components/ui/button'
+import { Checkbox } from '@/shared/components/ui/checkbox'
+import { Input } from '@/shared/components/ui/input'
+import { Label } from '@/shared/components/ui/label'
 import { AppLink, useAppNavigate } from '@/lib/router-adapter'
 
 /**
@@ -20,29 +22,29 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
+  function handleSubmit(e: SyntheticEvent<HTMLFormElement>) {
+  e.preventDefault()
+  setError(null)
 
-    const form = new FormData(e.currentTarget)
-    const email = String(form.get('email') ?? '').trim()
-    const password = String(form.get('password') ?? '')
+  const form = new FormData(e.currentTarget)
+  const email = String(form.get('email') ?? '').trim()
+  const password = String(form.get('password') ?? '')
 
-    if (!email || !password) {
-      setError('Completá tu correo y contraseña para continuar.')
-      return
-    }
-
-    setLoading(true)
-    // Simulación de llamada a auth — reemplazar por el servicio real.
-    window.setTimeout(() => {
-      setLoading(false)
-      navigate('/')
-    }, 900)
+  if (!email || !password) {
+    setError('Completá tu correo y contraseña para continuar.')
+    return
   }
 
+  setLoading(true)
+
+  window.setTimeout(() => {
+    setLoading(false)
+    navigate('/')
+  }, 900)
+}
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+    <Form onSubmit={handleSubmit} noValidate>
       {error && (
         <div
           role="alert"
@@ -53,20 +55,13 @@ export function LoginForm() {
       )}
 
       <div className="space-y-2">
-        <Label htmlFor="email">Correo electrónico</Label>
-        <Input
-          id="email"
-          name="email"
-          type="email"
-          autoComplete="email"
-          placeholder="nombre@empresa.com"
-          disabled={loading}
-        />
+        <FormLabel htmlFor="email">Correo electrónico</FormLabel>
+        <FormInput type="email" id="email" autoComplete="email" disabled={loading} placeholder="nombre@empresa.com" />
       </div>
 
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label htmlFor="password">Contraseña</Label>
+          <FormLabel htmlFor="password">Contraseña</FormLabel>
           <AppLink
             href="/recuperar-contrasena"
             className="text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
@@ -75,15 +70,8 @@ export function LoginForm() {
           </AppLink>
         </div>
         <div className="relative">
-          <Input
-            id="password"
-            name="password"
-            type={showPassword ? 'text' : 'password'}
-            autoComplete="current-password"
-            placeholder="••••••••"
-            disabled={loading}
-            className="pr-10"
-          />
+          <FormInput  id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" disabled={loading} placeholder="••••••••" className="pr-10" />
+          
           <button
             type="button"
             onClick={() => setShowPassword((v) => !v)}
@@ -111,6 +99,6 @@ export function LoginForm() {
         {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
         {loading ? 'Ingresando...' : 'Iniciar sesión'}
       </Button>
-    </form>
+    </Form>
   )
 }

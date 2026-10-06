@@ -1,6 +1,6 @@
 import { Zap } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card'
-import { LoginForm } from '@/features/auth/components/LoginForm'
+import { Card } from '@/shared/components/ui/card'
+import Link from 'next/link'
 
 /**
  * Login — fuera del shell del dashboard (sin sidebar/navbar), pero con la
@@ -9,7 +9,7 @@ import { LoginForm } from '@/features/auth/components/LoginForm'
  * de entrar. Misma paleta, mismo radius, sin gradientes ni sombras elevadas
  * — reglas ya definidas en "Arquitectura de Navegación — NEXUS ONE".
  */
-export default function LoginPage() {
+export default function LoginPage({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-muted/30 px-4 py-12">
       <div className="mb-8 flex flex-col items-center gap-2.5">
@@ -23,19 +23,17 @@ export default function LoginPage() {
       </div>
 
       <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle className="text-xl">Iniciar sesión</CardTitle>
-          <CardDescription>Ingresá con tu cuenta para acceder al panel.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <LoginForm />
-        </CardContent>
+        {children}
       </Card>
 
-      <p className="mt-6 text-center text-xs text-muted-foreground">
-        ¿No tenés cuenta?{' '}
-        <span className="font-medium text-foreground">Contactá a tu administrador.</span>
-      </p>
+      <nav className="mt-6 text-center flex flex-col gap-2">
+        <Link href="#" className="text-xs text-muted-foreground">
+          ¿No tenés cuenta?{' '}<span className="font-medium text-foreground">Registrate.</span>
+        </Link>
+        <Link href="#" className="text-xs text-muted-foreground">
+          ¿olvidaste tu Contraseña?{' '}<span className="font-medium text-foreground">Recuperar Contraseña</span>
+        </Link>
+      </nav>
     </div>
   )
 }
