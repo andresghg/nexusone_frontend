@@ -1,8 +1,8 @@
 'use client'
 
 import { ChevronRight } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
 import { isItemActive } from '@/lib/navigation-utils'
 import { cn } from '@/lib/utils'
 import type { NavBranch } from '@/types/navigation'

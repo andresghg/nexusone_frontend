@@ -1,5 +1,5 @@
 import { ArrowRight, DollarSign, Package, ReceiptText, TrendingUp } from 'lucide-react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/shared/components/ui/card'
 import { AppLink } from '@/lib/router-adapter'
 
 const kpis = [

@@ -1,8 +1,8 @@
 'use client'
 
 import { Bell, ChevronRight, Menu, Moon, Plus, Sun } from 'lucide-react'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Button } from '@/components/ui/button'
+import { Avatar, AvatarFallback } from '@/shared/components/ui/avatar'
+import { Button } from '@/shared/components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@/shared/components/ui/dropdown-menu'
 import { AppLink } from '@/lib/router-adapter'
 import { findBreadcrumbs } from '@/lib/navigation-utils'
 import type { NavigationGroup } from '@/types/navigation'
@@ -73,7 +73,7 @@ export function AppNavbar({ groups, pathname, onOpenMobile, theme, onToggleTheme
 
         {/* Acción principal del POS: visible, pero sin competir con la navegación */}
         <Button size="sm" asChild className="hidden h-9 gap-1.5 sm:inline-flex">
-          <AppLink href="/pos/facturacion/nueva">
+          <AppLink href="/dashboard/pos/facturacion/nueva">
             <Plus className="size-4" aria-hidden />
             Nueva factura
           </AppLink>

@@ -95,10 +95,7 @@ export function LoginForm() {
         </Label>
       </div>
 
-      <Button type="submit" className="w-full" disabled={loading}>
-        {loading && <Loader2 className="size-4 animate-spin" aria-hidden />}
-        {loading ? 'Ingresando...' : 'Iniciar sesión'}
-      </Button>
+      <FormSubmit disabled={loading} value="Iniciar sesión" />
     </Form>
   )
 }

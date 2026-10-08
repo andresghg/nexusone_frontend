@@ -1,6 +1,6 @@
 import { Zap } from 'lucide-react'
 import { Card } from '@/shared/components/ui/card'
-import Link from 'next/link'
+import { AppLink } from '@/lib/router-adapter'
 
 /**
  * Login — fuera del shell del dashboard (sin sidebar/navbar), pero con la
@@ -27,12 +27,12 @@ export default function LoginPage({ children }: { children: React.ReactNode }) {
       </Card>
 
       <nav className="mt-6 text-center flex flex-col gap-2">
-        <Link href="#" className="text-xs text-muted-foreground">
+        <AppLink href="#" className="text-xs text-muted-foreground">
           ¿No tenés cuenta?{' '}<span className="font-medium text-foreground">Registrate.</span>
-        </Link>
-        <Link href="#" className="text-xs text-muted-foreground">
+        </AppLink>
+        <AppLink href="#" className="text-xs text-muted-foreground">
           ¿olvidaste tu Contraseña?{' '}<span className="font-medium text-foreground">Recuperar Contraseña</span>
-        </Link>
+        </AppLink>
       </nav>
     </div>
   )

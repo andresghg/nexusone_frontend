@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Search } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Button } from '@/shared/components/ui/button'
 import {
   CommandDialog,
   CommandEmpty,
@@ -10,7 +10,7 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command'
+} from '@/shared/components/ui/command'
 import { flattenLeaves } from '@/lib/navigation-utils'
 import { useAppNavigate } from '@/lib/router-adapter'
 import type { NavigationGroup } from '@/types/navigation'

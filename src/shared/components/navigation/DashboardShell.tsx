@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, type ReactNode } from 'react'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import { AppNavbar } from '@/components/navigation/AppNavbar'
-import { AppSidebar } from '@/components/navigation/AppSidebar'
+import { TooltipProvider } from '@/shared/components/ui/tooltip'
+import { AppNavbar } from '@/shared/components/navigation/AppNavbar'
+import { AppSidebar } from '@/shared/components/navigation/AppSidebar'
 import { navigationConfig } from '@/config/navigation'
 import { useSidebarState } from '@/hooks/use-sidebar-state'
 import { useTheme } from '@/hooks/use-theme'

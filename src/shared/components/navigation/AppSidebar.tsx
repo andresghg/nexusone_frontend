@@ -1,9 +1,9 @@
 'use client'
 
 import { PanelLeftClose, PanelLeftOpen, X, Zap } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Button } from '@/shared/components/ui/button'
+import { ScrollArea } from '@/shared/components/ui/scroll-area'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { isBranch, type NavigationGroup } from '@/types/navigation'
 import { SidebarBranchItem } from './SidebarBranchItem'

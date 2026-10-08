@@ -1,7 +1,7 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Badge } from '@/shared/components/ui/badge'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
 import { AppLink } from '@/lib/router-adapter'
 import { isLeafActive } from '@/lib/navigation-utils'
 import { cn } from '@/lib/utils'
