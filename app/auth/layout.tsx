@@ -1,6 +1,6 @@
 import { Zap } from 'lucide-react'
 import { Card } from '@/shared/components/ui/card'
-import { AppLink } from '@/lib/router-adapter'
+import { AuthNav } from '@/features/auth/components/AuthNav'
 
 /**
  * Login — fuera del shell del dashboard (sin sidebar/navbar), pero con la
@@ -26,14 +26,7 @@ export default function LoginPage({ children }: { children: React.ReactNode }) {
         {children}
       </Card>
 
-      <nav className="mt-6 text-center flex flex-col gap-2">
-        <AppLink href="#" className="text-xs text-muted-foreground">
-          ¿No tenés cuenta?{' '}<span className="font-medium text-foreground">Registrate.</span>
-        </AppLink>
-        <AppLink href="#" className="text-xs text-muted-foreground">
-          ¿olvidaste tu Contraseña?{' '}<span className="font-medium text-foreground">Recuperar Contraseña</span>
-        </AppLink>
-      </nav>
+      <AuthNav />
     </div>
   )
 }

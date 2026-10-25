@@ -8,7 +8,11 @@ import { Button } from '@/shared/components/ui/button'
 import { Checkbox } from '@/shared/components/ui/checkbox'
 import { Input } from '@/shared/components/ui/input'
 import { Label } from '@/shared/components/ui/label'
-import { AppLink, useAppNavigate } from '@/lib/router-adapter'
+import { AppLink } from '@/lib/router-adapter'
+import { useForm } from 'react-hook-form'
+import { SignInInput, SignInSchema } from '../schemas/authSchema'
+import { toast } from 'sonner'
+import { signInAction } from '@/features/auth/actions/auth-action'
 
 /**
  * Formulario de login — mock de autenticación (sin backend real todavía),
@@ -17,46 +21,42 @@ import { AppLink, useAppNavigate } from '@/lib/router-adapter'
  * servicio de auth real sin cambiar de forma.
  */
 export function LoginForm() {
-  const navigate = useAppNavigate()
+  // const navigate = useAppNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // const [error, setError] = useState<string | null>(null)
 
-  function handleSubmit(e: SyntheticEvent<HTMLFormElement>) {
-  e.preventDefault()
-  setError(null)
+  const {register, handleSubmit, formState: {errors}} = useForm({
+    resolver: zodResolver(SignInSchema)
+  })
 
-  const form = new FormData(e.currentTarget)
-  const email = String(form.get('email') ?? '').trim()
-  const password = String(form.get('password') ?? '')
+  const onSubmit = async (data: SignInInput) => {
+    const { error, success } = await signInAction(data)
 
-  if (!email || !password) {
-    setError('Completá tu correo y contraseña para continuar.')
-    return
+    if(error) {
+      toast.error(error)
+    }
+    if(success) {
+      toast.success("/dashboard")
+    }
   }
 
-  setLoading(true)
-
-  window.setTimeout(() => {
-    setLoading(false)
-    navigate('/')
-  }, 900)
-}
+  
 
   return (
-    <Form onSubmit={handleSubmit} noValidate>
-      {error && (
+    <Form onSubmit={handleSubmit(onSubmit)} noValidate>
+      {/* {error && (
         <div
           role="alert"
           className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
         >
           {error}
         </div>
-      )}
+      )} */}
 
       <div className="space-y-2">
         <FormLabel htmlFor="email">Correo electrónico</FormLabel>
-        <FormInput type="email" id="email" autoComplete="email" disabled={loading} placeholder="nombre@empresa.com" />
+        <FormInput {...register('email')} type="email" id="email" autoComplete="email" disabled={loading} placeholder="nombre@empresa.com" />
       </div>
 
       <div className="space-y-2">
@@ -70,7 +70,7 @@ export function LoginForm() {
           </AppLink>
         </div>
         <div className="relative">
-          <FormInput  id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" disabled={loading} placeholder="••••••••" className="pr-10" />
+          <FormInput {...register('password')} id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" disabled={loading} placeholder="••••••••" className="pr-10" />
           
           <button
             type="button"
