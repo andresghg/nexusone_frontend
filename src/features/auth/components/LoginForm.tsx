@@ -11,7 +11,7 @@ import { Label } from '@/shared/components/ui/label'
 import { AppLink } from '@/lib/router-adapter'
 import { useForm } from 'react-hook-form'
 import { SignInInput, SignInSchema } from '../schemas/authSchema'
-import { toast } from 'sonner'
+import toast from "react-hot-toast"
 import { signInAction } from '@/features/auth/actions/auth-action'
 
 /**

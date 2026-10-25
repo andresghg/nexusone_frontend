@@ -1,19 +1,16 @@
-/* import { db } from "@/src/db";
-import { User } from "../types/auth.types";
+import { db } from "@/db";
 
 export interface IAuthRepository {
-    userExist(email: string): Promise<User | undefined>;
+  userExist(email: string): Promise<{ id: string } | undefined>;
 }
 
 class AuthRepository implements IAuthRepository {
-    async userExist(email: string) {
-        return await db.query.users.findFirst({
-            where: {
-                email
-            }
-        })
-        
-    }
+  async userExist(email: string) {
+    return await db.query.authUsers.findFirst({
+      columns: { id: true },
+      where: { email: email.trim().toLowerCase() },
+    });
+  }
 }
 
 export const authRepository = new AuthRepository();

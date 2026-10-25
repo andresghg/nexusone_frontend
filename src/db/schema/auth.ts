@@ -1,17 +1,5 @@
-
-import {
-  pgSchema,
-  pgTable,
-  uuid,
-  text,
-  timestamp,
-} from "drizzle-orm/pg-core";
-
-export const authSchema = pgSchema("auth");
-
-export const authUsers = authSchema.table("users", {
-  id: uuid("id").primaryKey(),
-});
+import { pgTable, uuid, text, timestamp } from "drizzle-orm/pg-core";
+import { authUsers } from "drizzle-orm/supabase";
 
 export const profiles = pgTable("profiles", {
   id: uuid("id")
@@ -21,15 +9,11 @@ export const profiles = pgTable("profiles", {
   fullName: text("full_name"),
   avatarUrl: text("avatar_url"),
 
-  createdAt: timestamp("created_at", {
-    withTimezone: true,
-  })
+  createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
 
-  updatedAt: timestamp("updated_at", {
-    withTimezone: true,
-  })
+  updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
 });

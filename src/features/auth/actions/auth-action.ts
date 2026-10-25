@@ -1,6 +1,7 @@
 "use server"
 
-import { ForgotPasswordInput, forgotPasswordSchema, SignInInput, SignInSchema, SignUpInput, SignUpSchema, SetPasswordInput, SetPasswordSchema } from "../schemas/authSchema";
+import { authService } from "../services/AuthService";
+import { SignInInput, SignInSchema, SignUpInput, SignUpSchema } from "../schemas/authSchema";
 
 export async function signUpAction(input: SignUpInput) {
     const data = SignUpSchema.safeParse(input)
@@ -12,7 +13,8 @@ export async function signUpAction(input: SignUpInput) {
         }
     }
 
-    // const response = await
+    const response = await authService.register(data.data)
+    return response
 }
 
 export async function signInAction(input: SignInInput) {

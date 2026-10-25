@@ -1,9 +1,8 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
-import * as schema from './schema'
-import { relations } from './relations';
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { relations } from "./relations";
 
+// Solo servidor. prepare:false es necesario con el pooler en modo transacción (puerto 6543).
+const client = postgres(process.env.DATABASE_URL!, { prepare: false });
 
-export const db = drizzle(process.env.DATABASE_URL!, {
-    schema,
-    relations,
-});
+export const db = drizzle({ client, relations });
