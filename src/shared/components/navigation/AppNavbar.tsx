@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/shared/components/ui/dropdown-menu'
 import { AppLink } from '@/lib/router-adapter'
+import { signOutAction } from '@/features/auth/actions/auth-action'
 import { findBreadcrumbs } from '@/lib/navigation-utils'
 import type { NavigationGroup } from '@/types/navigation'
 import { GlobalSearch } from './GlobalSearch'
@@ -129,7 +130,7 @@ export function AppNavbar({ groups, pathname, onOpenMobile, theme, onToggleTheme
             <DropdownMenuItem>Mi perfil</DropdownMenuItem>
             <DropdownMenuItem>Preferencias</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Cerrar sesión</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => signOutAction()}>Cerrar sesión</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

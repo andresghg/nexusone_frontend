@@ -11,8 +11,10 @@ import { Label } from '@/shared/components/ui/label'
 import { AppLink } from '@/lib/router-adapter'
 import { useForm } from 'react-hook-form'
 import { SignInInput, SignInSchema } from '../schemas/authSchema'
-import toast from "react-hot-toast"
+import toast from "react-hot-toast";
 import { signInAction } from '@/features/auth/actions/auth-action'
+import { redirect } from "next/navigation"
+import { useRouter } from "next/navigation"
 
 /**
  * Formulario de login — mock de autenticación (sin backend real todavía),
@@ -26,9 +28,10 @@ export function LoginForm() {
   const [loading, setLoading] = useState(false)
   // const [error, setError] = useState<string | null>(null)
 
-  const {register, handleSubmit, formState: {errors}} = useForm({
+  const {register, handleSubmit, formState: {errors}, reset} = useForm({
     resolver: zodResolver(SignInSchema)
   })
+  const router = useRouter()
 
   const onSubmit = async (data: SignInInput) => {
     const { error, success } = await signInAction(data)
@@ -37,7 +40,8 @@ export function LoginForm() {
       toast.error(error)
     }
     if(success) {
-      toast.success("/dashboard")
+      router.replace("/dashboard")
+  router.refresh()
     }
   }
 
@@ -88,12 +92,13 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/*<div className="flex items-center gap-2">
         <Checkbox id="remember" name="remember" disabled={loading} />
         <Label htmlFor="remember" className="text-sm font-normal text-muted-foreground">
           Mantener sesión iniciada
         </Label>
-      </div>
+      </div>*/}
+
 
       <FormSubmit disabled={loading} value="Iniciar sesión" />
     </Form>

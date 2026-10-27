@@ -14,7 +14,7 @@ export function RegisterForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
 
-  const {register, handleSubmit, formState: {errors}} = useForm({
+  const {register, handleSubmit, formState: {errors}, reset} = useForm({
     resolver: zodResolver(SignUpSchema),
   })
 
@@ -25,6 +25,7 @@ export function RegisterForm() {
     }
     if(success) {
       toast.success(success)
+      reset()
     }
   }
 
@@ -33,14 +34,17 @@ export function RegisterForm() {
         <div className="space-y-2">
             <FormLabel htmlFor="name">Nombre</FormLabel>
             <FormInput {...register("name")} type="text" id="name" autoComplete="name" placeholder="Tu nombre" />
-            {errors.name && <FormErrors>{errors.name.message}</FormErrors>}
+            
         </div>
+
+        {errors.name && <FormErrors>{errors.name.message}</FormErrors>}
 
         <div className="space-y-2">
             <FormLabel htmlFor="email">Correo electrónico</FormLabel>
             <FormInput {...register("email")} type="email" id="email" autoComplete="email" placeholder="tu@email.com" />
-            {errors.email && <FormErrors>{errors.email.message}</FormErrors>}
         </div>
+
+        {errors.email && <FormErrors>{errors.email.message}</FormErrors>}
 
         <div className="space-y-2">
                 <div className="flex items-center justify-between">
@@ -49,7 +53,7 @@ export function RegisterForm() {
                 </div>
                 <div className="relative">
                   <FormInput {...register("password")} id="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="••••••••" className="pr-10" />
-                  {errors.password && <FormErrors>{errors.password.message}</FormErrors>}
+                  
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
@@ -67,6 +71,8 @@ export function RegisterForm() {
                 </div>
         </div>
 
+        {errors.password && <FormErrors>{errors.password.message}</FormErrors>}
+
         <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <FormLabel htmlFor="passwordConfirmation">Repetir contraseña</FormLabel>
@@ -74,7 +80,7 @@ export function RegisterForm() {
                 </div>
                 <div className="relative">
                   <FormInput {...register("passwordConfirmation")} id="passwordConfirmation" type={showPassword ? 'text' : 'password'} autoComplete="current-password" placeholder="••••••••" className="pr-10" />
-                  {errors.passwordConfirmation && <FormErrors>{errors.passwordConfirmation.message}</FormErrors>}
+                  
                   <button
                       type="button"
                       onClick={() => setShowPassword((v) => !v)}
@@ -90,6 +96,8 @@ export function RegisterForm() {
                     </button>
                 </div>
         </div>
+
+        {errors.passwordConfirmation && <FormErrors>{errors.passwordConfirmation.message}</FormErrors>}
 
         <FormSubmit value="Registrarse" />
     </Form>
