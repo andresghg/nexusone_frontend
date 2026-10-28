@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { SignUpSchema, SignUpInput } from "../schemas/authSchema"
 import { signUpAction } from "../actions/auth-action"
 import toast from "react-hot-toast";
+import { useRouter } from "next/navigation"
 
 export function RegisterForm() {
 
@@ -17,6 +18,7 @@ export function RegisterForm() {
   const {register, handleSubmit, formState: {errors}, reset} = useForm({
     resolver: zodResolver(SignUpSchema),
   })
+  const router = useRouter()
 
   const onSubmit = async (data: SignUpInput) => {
     const { error, success } = await signUpAction(data)
@@ -25,7 +27,8 @@ export function RegisterForm() {
     }
     if(success) {
       toast.success(success)
-      reset()
+      router.replace("/dashboard")
+      router.refresh()
     }
   }
 

@@ -13,7 +13,6 @@ import { useForm } from 'react-hook-form'
 import { SignInInput, SignInSchema } from '../schemas/authSchema'
 import toast from "react-hot-toast";
 import { signInAction } from '@/features/auth/actions/auth-action'
-import { redirect } from "next/navigation"
 import { useRouter } from "next/navigation"
 
 /**
@@ -41,7 +40,7 @@ export function LoginForm() {
     }
     if(success) {
       router.replace("/dashboard")
-  router.refresh()
+      router.refresh()
     }
   }
 
