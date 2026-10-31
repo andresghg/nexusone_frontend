@@ -10,7 +10,7 @@ import { signUpAction } from "../actions/auth-action"
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation"
 
-export function RegisterForm() {
+export function RegisterForm({ next = '/dashboard' }: { next?: string }) {
 
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -27,7 +27,7 @@ export function RegisterForm() {
     }
     if(success) {
       toast.success(success)
-      router.replace("/dashboard")
+      router.replace(next)
       router.refresh()
     }
   }

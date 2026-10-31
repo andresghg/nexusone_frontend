@@ -1,5 +1,11 @@
-import ModulePlaceholder from '@/features/placeholder/ModulePlaceholder'
+import { getCurrentOrganization } from '@/features/organization/utils/getCurrentOrganization'
+import { OrganizationForm } from '@/features/organization/components/OrganizationForm'
+import { requirePermission } from '@/features/organization/utils/getCurrentAccess'
 
-export default function Page() {
-  return <ModulePlaceholder title="Empresa" description="Datos fiscales y de contacto" />
+export default async function Page() {
+  const { organization } = await getCurrentOrganization()
+
+  await requirePermission('config.empresa.read')
+  
+  return <OrganizationForm organization={organization} />
 }

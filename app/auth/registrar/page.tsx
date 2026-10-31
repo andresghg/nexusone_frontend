@@ -2,12 +2,15 @@ import { RegisterForm } from '@/features/auth/components/RegisterForm'
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/components/ui/card'
 import { Metadata } from 'next'
 import { generatePageTitle } from "@/shared/utils/metadata";
+import { safeNext } from '@/features/auth/utils/safeNext'
 
 export const metadata: Metadata = {
   title: generatePageTitle("Registrar Usuario"),
 }
 
-export default function Page() {
+export default async function Page({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams
+
   return (
     <>
       <CardHeader>
@@ -16,7 +19,7 @@ export default function Page() {
       </CardHeader>
 
       <CardContent>
-        <RegisterForm />
+        <RegisterForm next={safeNext(next)} />
       </CardContent>
     </>
   )

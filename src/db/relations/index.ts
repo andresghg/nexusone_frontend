@@ -38,6 +38,10 @@ export const relations = defineRelations({ ...schema, authUsers }, (r) => ({
       from: r.organizations.id,
       to: r.organizationModules.organizationId,
     }),
+    invitations: r.many.organizationInvitations({
+      from: r.organizations.id,
+      to: r.organizationInvitations.organizationId,
+    }),
   },
 
   organizationMembers: {
@@ -54,6 +58,13 @@ export const relations = defineRelations({ ...schema, authUsers }, (r) => ({
   organizationModules: {
     organization: r.one.organizations({
       from: r.organizationModules.organizationId,
+      to: r.organizations.id,
+    }),
+  },
+  
+  organizationInvitations: {
+    organization: r.one.organizations({
+      from: r.organizationInvitations.organizationId,
       to: r.organizations.id,
     }),
   },

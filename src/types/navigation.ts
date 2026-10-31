@@ -13,18 +13,26 @@ import type { LucideIcon } from 'lucide-react'
  * ============================================================================
  */
 
-/** Permiso granular. En producción vendrá del rol/sesión del usuario. */
-export type Permission =
-  | 'pos.facturacion.read'
-  | 'pos.facturacion.create'
-  | 'pos.inventario.read'
-  | 'gestion.calendario.read'
-  | 'gestion.tareas.read'
-  | 'gestion.mensajeria.read'
-  | 'finanzas.bancos.read'
-  | 'finanzas.reportes.read'
-  | 'config.empresa.read'
-  | 'config.usuarios.read'
+/**
+ * Permiso granular. La lista vive como valor para poder recorrerla en código
+ * (roles, tests); el tipo se deriva de ella. El prefijo coincide con el
+ * module_key de organization_modules (pos, gestion, finanzas).
+ */
+export const PERMISSIONS = [
+  'dashboard.read',
+  'pos.facturacion.read',
+  'pos.facturacion.create',
+  'pos.inventario.read',
+  'gestion.calendario.read',
+  'gestion.tareas.read',
+  'gestion.mensajeria.read',
+  'finanzas.bancos.read',
+  'finanzas.reportes.read',
+  'config.empresa.read',
+  'config.usuarios.read',
+] as const
+
+export type Permission = (typeof PERMISSIONS)[number]
 
 /**
  * Ciclo de vida de un módulo:

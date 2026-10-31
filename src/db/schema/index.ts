@@ -1,4 +1,4 @@
-import { organizations, organizationMembers, organizationModules } from "./organization";
+import { organizations, organizationMembers, organizationModules, organizationInvitations } from "./organization";
 import { profiles } from "./auth";
 
 export {
@@ -6,4 +6,5 @@ export {
     organizationMembers,
     organizationModules,
     profiles,
+    organizationInvitations,
 }   

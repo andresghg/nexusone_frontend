@@ -13,7 +13,7 @@ import {
   Users,
   Wallet,
 } from 'lucide-react'
-import type { NavigationGroup, Permission } from '@/types/navigation'
+import type { NavigationGroup } from '@/types/navigation'
 
 /**
  * ============================================================================
@@ -164,22 +164,4 @@ export const navigationConfig: NavigationGroup[] = [
       },
     ],
   },
-]
-
-/**
- * Permisos del usuario actual.
- * En producción: derivados de la sesión (Server Component en Next.js)
- * y pasados como prop o vía contexto. Aquí simulamos un rol "cajero/admin".
- */
-export const currentUserPermissions: Permission[] = [
-  'pos.facturacion.read',
-  'pos.facturacion.create',
-  'pos.inventario.read',
-  'gestion.calendario.read',
-  'gestion.tareas.read',
-  'gestion.mensajeria.read',
-  'finanzas.bancos.read',
-  'finanzas.reportes.read',
-  'config.empresa.read',
-  'config.usuarios.read',
 ]

@@ -21,7 +21,7 @@ import { useRouter } from "next/navigation"
  * InventarioPage): UI completa y funcional, lista para conectar a un
  * servicio de auth real sin cambiar de forma.
  */
-export function LoginForm() {
+export function LoginForm({ next = '/dashboard' }: { next?: string }) {
   // const navigate = useAppNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -39,7 +39,7 @@ export function LoginForm() {
       toast.error(error)
     }
     if(success) {
-      router.replace("/dashboard")
+      router.replace(next)
       router.refresh()
     }
   }

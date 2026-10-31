@@ -2,13 +2,14 @@ import { CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/co
 import { LoginForm } from '@/features/auth/components/LoginForm'
 import { Metadata } from 'next'
 import { generatePageTitle } from "@/shared/utils/metadata";
+import { safeNext } from '@/features/auth/utils/safeNext'
 
 export const metadata: Metadata = {
   title: generatePageTitle("Iniciar Sesión"),
 }
 
-export default function Page() {
-
+export default async function Page({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
+  const { next } = await searchParams
 
   return (
     <>
@@ -18,7 +19,7 @@ export default function Page() {
       </CardHeader>
       
       <CardContent>
-        <LoginForm />  
+        <LoginForm next={safeNext(next)} />  
       </CardContent>
     </>
   )
