@@ -3,16 +3,16 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import {
+  AcceptInvitationSchema,
   CreateInvitationSchema,
   RevokeInvitationSchema,
-  AcceptInvitationSchema,
+  type AcceptInvitationInput,
   type CreateInvitationInput,
   type RevokeInvitationInput,
-  type AcceptInvitationInput,
 } from '../schemas/invitationSchema'
 import { invitationService } from '../services/InvitationService'
 
-const USERS_PATH = '/dashboard/configuracion/usuarios'
+const USERS_PATH = '/dashboard/[slug]/configuracion/usuarios'
 
 async function getUserId() {
   const supabase = await createClient()
@@ -28,8 +28,9 @@ export async function createInvitationAction(input: CreateInvitationInput) {
   if (!actorId) return { error: 'Sesión no válida', success: '', token: '' }
 
   try {
-    const result = await invitationService.create(actorId, data.data.role)
-    if (!result.error) revalidatePath(USERS_PATH)
+    const { organizationId, role } = data.data
+    const result = await invitationService.create(actorId, organizationId, role)
+    if (!result.error) revalidatePath(USERS_PATH, 'page')
     return result
   } catch {
     return { error: 'No se pudo crear la invitación', success: '', token: '' }
@@ -44,8 +45,9 @@ export async function revokeInvitationAction(input: RevokeInvitationInput) {
   if (!actorId) return { error: 'Sesión no válida', success: '' }
 
   try {
-    const result = await invitationService.revoke(actorId, data.data.invitationId)
-    if (!result.error) revalidatePath(USERS_PATH)
+    const { organizationId, invitationId } = data.data
+    const result = await invitationService.revoke(actorId, organizationId, invitationId)
+    if (!result.error) revalidatePath(USERS_PATH, 'page')
     return result
   } catch {
     return { error: 'No se pudo revocar la invitación', success: '' }
@@ -54,14 +56,14 @@ export async function revokeInvitationAction(input: RevokeInvitationInput) {
 
 export async function acceptInvitationAction(input: AcceptInvitationInput) {
   const data = AcceptInvitationSchema.safeParse(input)
-  if (!data.success) return { error: 'Invitación inválida', success: '' }
+  if (!data.success) return { error: 'Invitación inválida', success: '', slug: '' }
 
   const userId = await getUserId()
-  if (!userId) return { error: 'Sesión no válida', success: '' }
+  if (!userId) return { error: 'Sesión no válida', success: '', slug: '' }
 
   try {
     return await invitationService.accept(userId, data.data.token)
   } catch {
-    return { error: 'No se pudo aceptar la invitación', success: '' }
+    return { error: 'No se pudo aceptar la invitación', success: '', slug: '' }
   }
 }

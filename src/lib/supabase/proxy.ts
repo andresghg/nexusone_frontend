@@ -1,6 +1,7 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { extractOrganizationSlug } from '@/features/organization/pickOrganization'
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request })
@@ -61,7 +62,7 @@ export async function updateSession(request: NextRequest) {
     response.cookies.delete(ACTIVITY_COOKIE)
   }
 
-  const isProtected = pathname.startsWith('/dashboard')
+ const isProtected = pathname.startsWith('/dashboard') || pathname.startsWith('/nueva-empresa')
 
   const isAuthPage =
     pathname.startsWith('/auth') &&
@@ -87,6 +88,19 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isAuthPage) {
     return redirectTo('/dashboard')
+  }
+
+  // Pista de "última empresa usada". Solo una sugerencia: `/dashboard` la valida
+  // contra las membresías del usuario antes de usarla.
+  const slug = extractOrganizationSlug(pathname)
+  if (user && slug && request.cookies.get('last-org')?.value !== slug) {
+    response.cookies.set('last-org', slug, {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+    })
   }
 
   return response

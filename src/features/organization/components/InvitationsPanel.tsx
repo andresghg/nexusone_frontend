@@ -22,16 +22,16 @@ function formatDateTime(iso: string) {
   })
 }
 
-type Props = { invitations: InvitationRow[]; canInviteAdmin: boolean }
+type Props = { organizationId: string; invitations: InvitationRow[]; canInviteAdmin: boolean }
 
-export function InvitationsPanel({ invitations, canInviteAdmin }: Props) {
+export function InvitationsPanel({ organizationId, invitations, canInviteAdmin }: Props) {
   const [role, setRole] = useState<'admin' | 'member'>('member')
   const [link, setLink] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
   const create = () =>
     startTransition(async () => {
-      const { error, success, token } = await createInvitationAction({ role })
+      const { error, success, token } = await createInvitationAction({ organizationId, role })
       if (error) {
         toast.error(error)
         return
@@ -42,7 +42,7 @@ export function InvitationsPanel({ invitations, canInviteAdmin }: Props) {
 
   const revoke = (invitationId: string) =>
     startTransition(async () => {
-      const { error, success } = await revokeInvitationAction({ invitationId })
+      const { error, success } = await revokeInvitationAction({ organizationId, invitationId })
       if (error) toast.error(error)
       else toast.success(success)
     })

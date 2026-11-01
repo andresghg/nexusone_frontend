@@ -5,20 +5,31 @@ import { organizationRepository, type IOrganizationRepository } from './Organiza
 const fail = (error: string) => ({ error, success: '' })
 const ok = (success: string) => ({ error: '', success })
 
-class MemberService {
+export class MemberService {
   constructor(
     private members: IMemberRepository,
     private organizations: IOrganizationRepository,
   ) {}
 
-  async list(actorId: string) {
-    const org = await this.organizations.findByUserId(actorId)
-    if (!org || (org.role !== 'owner' && org.role !== 'admin')) return []
-    return this.members.findAll(org.id)
+  // El rol del actor se resuelve SIEMPRE dentro de la empresa indicada:
+  // ser propietario de otra empresa no da ningún permiso en esta.
+  private getActor(actorId: string, organizationId: string) {
+    return this.organizations.findByUserAndId(actorId, organizationId)
   }
 
-  async changeRole(actorId: string, targetUserId: string, role: ChangeRoleInput['role']) {
-    const actor = await this.organizations.findByUserId(actorId)
+  async list(actorId: string, organizationId: string) {
+    const actor = await this.getActor(actorId, organizationId)
+    if (!actor || (actor.role !== 'owner' && actor.role !== 'admin')) return []
+    return this.members.findAll(actor.id)
+  }
+
+  async changeRole(
+    actorId: string,
+    organizationId: string,
+    targetUserId: string,
+    role: ChangeRoleInput['role'],
+  ) {
+    const actor = await this.getActor(actorId, organizationId)
     if (!actor || actor.role !== 'owner') {
       return fail('Solo el propietario puede cambiar roles')
     }
@@ -31,8 +42,8 @@ class MemberService {
     return ok('Rol actualizado')
   }
 
-  async remove(actorId: string, targetUserId: string) {
-    const actor = await this.organizations.findByUserId(actorId)
+  async remove(actorId: string, organizationId: string, targetUserId: string) {
+    const actor = await this.getActor(actorId, organizationId)
     if (!actor || (actor.role !== 'owner' && actor.role !== 'admin')) {
       return fail('No tienes permisos para quitar usuarios')
     }

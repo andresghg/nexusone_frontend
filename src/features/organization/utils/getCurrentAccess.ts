@@ -3,21 +3,15 @@ import { redirect } from 'next/navigation'
 import type { Permission } from '@/types/navigation'
 import { organizationRepository } from '../services/OrganizationRepository'
 import { resolvePermissions } from '../permissions'
-import { getCurrentOrganization } from './getCurrentOrganization'
+import { getActiveOrganization } from './getActiveOrganization'
 
-export const getCurrentAccess = cache(async () => {
-  const { user, organization } = await getCurrentOrganization()
-
-  // Sin empresa: solo puede registrarla
-  if (!organization) {
-    return { user, organization: null, permissions: ['config.empresa.read'] as Permission[] }
-  }
-
+export const getCurrentAccess = cache(async (slug: string) => {
+  const { user, organization } = await getActiveOrganization(slug)
   const modules = await organizationRepository.findEnabledModuleKeys(organization.id)
   return { user, organization, permissions: resolvePermissions(organization.role, modules) }
 })
 
-export async function requirePermission(permission: Permission) {
-  const { permissions } = await getCurrentAccess()
-  if (!permissions.includes(permission)) redirect('/dashboard')
+export async function requirePermission(slug: string, permission: Permission) {
+  const { permissions } = await getCurrentAccess(slug)
+  if (!permissions.includes(permission)) redirect(`/dashboard/${slug}`)
 }

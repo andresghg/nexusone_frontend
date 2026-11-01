@@ -19,7 +19,7 @@ import { GlobalSearch } from './GlobalSearch'
 
 interface AppNavbarProps {
   groups: NavigationGroup[]
-  pathname: string
+  basePath: string
   onOpenMobile: () => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
@@ -36,8 +36,8 @@ interface AppNavbarProps {
  * - Notificaciones  → eventos operativos (stock bajo, cobros).
  * - Tema / usuario  → utilidades de sesión.
  */
-export function AppNavbar({ groups, pathname, onOpenMobile, theme, onToggleTheme }: AppNavbarProps) {
-  const breadcrumbs = findBreadcrumbs(groups, pathname)
+export function AppNavbar({ groups, basePath, onOpenMobile, theme, onToggleTheme }: AppNavbarProps) {
+  const breadcrumbs = findBreadcrumbs(groups, basePath)
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -74,7 +74,7 @@ export function AppNavbar({ groups, pathname, onOpenMobile, theme, onToggleTheme
 
         {/* Acción principal del POS: visible, pero sin competir con la navegación */}
         <Button size="sm" asChild className="hidden h-9 gap-1.5 sm:inline-flex">
-          <AppLink href="/dashboard/pos/facturacion/nueva">
+          <AppLink href={`${basePath}/pos/facturacion/nueva`}>
             <Plus className="size-4" aria-hidden />
             Nueva factura
           </AppLink>

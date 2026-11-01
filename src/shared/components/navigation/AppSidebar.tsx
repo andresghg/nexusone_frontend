@@ -1,6 +1,6 @@
 'use client'
 
-import { PanelLeftClose, PanelLeftOpen, X, Zap } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import { Button } from '@/shared/components/ui/button'
 import { ScrollArea } from '@/shared/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip'
@@ -8,6 +8,8 @@ import { cn } from '@/lib/utils'
 import { isBranch, type NavigationGroup } from '@/types/navigation'
 import { SidebarBranchItem } from './SidebarBranchItem'
 import { SidebarLeafLink } from './SidebarLeafLink'
+import { OrganizationSwitcher, type OrganizationOption } from './OrganizationSwitcher'
+
 
 interface AppSidebarProps {
   groups: NavigationGroup[]
@@ -18,6 +20,9 @@ interface AppSidebarProps {
   onCloseMobile: () => void
   isGroupOpen: (id: string) => boolean
   onToggleGroup: (id: string) => void
+  organizations: OrganizationOption[]
+  currentSlug: string
+  canCreateOrganization: boolean
 }
 
 /**
@@ -54,32 +59,29 @@ export function AppSidebar(props: AppSidebarProps) {
           mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         )}
       >
-        {/* Marca */}
-        <div
-          className={cn(
-            'flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4',
-            collapsed && 'lg:justify-center lg:px-0',
-          )}
+        {/* Marca + selector de empresa */}
+      <div
+        className={cn(
+          'flex h-14 shrink-0 items-center gap-2.5 border-b border-border px-4',
+          collapsed && 'lg:justify-center lg:px-0',
+        )}
+      >
+        <OrganizationSwitcher
+          organizations={props.organizations}
+          currentSlug={props.currentSlug}
+          canCreate={props.canCreateOrganization}
+          collapsed={collapsed}
+        />
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onCloseMobile}
+          aria-label="Cerrar menú"
+          className="ml-auto size-8 lg:hidden"
         >
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-foreground">
-            <Zap className="size-4 text-background" aria-hidden />
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1 lg:block">
-              <p className="truncate text-sm font-semibold tracking-tight">NEXUS ONE</p>
-              <p className="truncate text-[11px] text-muted-foreground">Punto de venta</p>
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onCloseMobile}
-            aria-label="Cerrar menú"
-            className="ml-auto size-8 lg:hidden"
-          >
-            <X className="size-4" aria-hidden />
-          </Button>
-        </div>
+          <X className="size-4" aria-hidden />
+        </Button>
+      </div>
 
         {/* Navegación */}
         <ScrollArea className="flex-1">

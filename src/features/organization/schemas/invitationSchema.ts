@@ -1,10 +1,12 @@
 import z from 'zod'
 
 export const CreateInvitationSchema = z.object({
+  organizationId: z.uuid({ error: 'Empresa inválida' }),
   role: z.enum(['admin', 'member'], { error: 'Rol inválido' }),
 })
 
 export const RevokeInvitationSchema = z.object({
+  organizationId: z.uuid({ error: 'Empresa inválida' }),
   invitationId: z.uuid({ error: 'Invitación inválida' }),
 })
 

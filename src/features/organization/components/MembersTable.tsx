@@ -36,9 +36,9 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-CL', { dateStyle: 'medium', timeZone: 'America/Santiago' })
 }
 
-type Props = { members: MemberRow[]; currentUserId: string; currentRole: string }
+type Props = { organizationId: string; members: MemberRow[]; currentUserId: string; currentRole: string }
 
-export function MembersTable({ members, currentUserId, currentRole }: Props) {
+export function MembersTable({ organizationId, members, currentUserId, currentRole }: Props) {
   const [pending, startTransition] = useTransition()
 
   const run = (fn: () => Promise<{ error: string; success: string }>) =>
@@ -98,7 +98,7 @@ export function MembersTable({ members, currentUserId, currentRole }: Props) {
                       value={m.role}
                       disabled={pending}
                       onValueChange={(role) =>
-                        run(() => changeMemberRoleAction({ userId: m.userId, role: role as 'admin' | 'member' }))
+                        run(() => changeMemberRoleAction({ organizationId, userId: m.userId, role: role as 'admin' | 'member' }))
                       }
                     >
                       <SelectTrigger className="w-40">
@@ -142,7 +142,7 @@ export function MembersTable({ members, currentUserId, currentRole }: Props) {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => run(() => removeMemberAction({ userId: m.userId }))}>
+                          <AlertDialogAction onClick={() => run(() => removeMemberAction({ organizationId, userId: m.userId }))}>
                             Quitar
                           </AlertDialogAction>
                         </AlertDialogFooter>

@@ -108,3 +108,16 @@ export function findActiveBranchIds(groups: NavigationGroup[], pathname: string)
     group.items.filter((item) => isBranch(item) && isItemActive(item, pathname)).map((i) => i.id),
   )
 }
+
+/** Prefija las rutas del menú con la empresa activa: '/dashboard/pos' → '/dashboard/acme/pos'. */
+export function withBasePath(groups: NavigationGroup[], basePath: string): NavigationGroup[] {
+  const prefix = (href: string) => href.replace(/^\/dashboard/, basePath)
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.map((item): NavigationItem =>
+      isBranch(item)
+        ? { ...item, children: item.children.map((c) => ({ ...c, href: prefix(c.href) })) }
+        : { ...item, href: prefix(item.href) },
+    ),
+  }))
+}
