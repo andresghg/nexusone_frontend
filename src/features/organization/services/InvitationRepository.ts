@@ -16,6 +16,7 @@ export type ValidInvitation = {
   organizationId: string
   organizationName: string
   role: string
+  organizationSlug: string
 }
 
 export interface IInvitationRepository {
@@ -77,6 +78,7 @@ class InvitationRepository implements IInvitationRepository {
       organizationId: organizationInvitations.organizationId,
       organizationName: organizations.name,
       role: organizationInvitations.role,
+      organizationSlug: organizations.slug,
     })
     .from(organizationInvitations)
     .innerJoin(organizations, eq(organizations.id, organizationInvitations.organizationId))

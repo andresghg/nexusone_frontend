@@ -15,13 +15,13 @@ export function InvitationAccept({ token, organizationName, role }: Props) {
 
   const accept = () =>
     startTransition(async () => {
-      const { error, success } = await acceptInvitationAction({ token })
+      const { error, success, slug } = await acceptInvitationAction({ token })
       if (error) {
         toast.error(error)
         return
       }
       toast.success(success)
-      router.replace('/dashboard')
+      router.replace(`/dashboard/${slug}`)
       router.refresh()
     })
 

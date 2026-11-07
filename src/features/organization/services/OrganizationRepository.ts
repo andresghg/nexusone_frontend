@@ -23,21 +23,21 @@ export type OrganizationWithRole = Omit<
 > & { role: string }
 
 export interface IOrganizationRepository {
-  findByUserId(userId: string): Promise<OrganizationWithRole | undefined>
+  findByUserAndId(userId: string, organizationId: string): Promise<OrganizationWithRole | undefined>
   slugExists(slug: string): Promise<boolean>
   create(input: OrganizationData & { slug: string; ownerUserId: string }): Promise<{ id: string; slug: string }>
   findEnabledModuleKeys(organizationId: string): Promise<string[]>
   update(id: string, data: OrganizationData): Promise<void>
+  findAllByUserId(userId: string): Promise<OrganizationWithRole[]>
+  findByUserAndSlug(userId: string, slug: string): Promise<OrganizationWithRole | undefined>
 }
 
 class OrganizationRepository implements IOrganizationRepository {
- async findByUserId(userId: string) {
+ async findByUserAndId(userId: string, organizationId: string) {
   const membership = await db.query.organizationMembers.findFirst({
-    where: { userId },
+    where: { userId, organizationId },
     with: {
-      organization: {
-        columns: { createdAt: false, updatedAt: false, ownerUserId: false },
-      },
+      organization: { columns: { createdAt: false, updatedAt: false, ownerUserId: false } },
     },
   })
   if (!membership?.organization) return undefined
@@ -84,6 +84,34 @@ async create(input: OrganizationData & { slug: string; ownerUserId: string }) {
       .set({ ...data, updatedAt: new Date() })
       .where(eq(organizations.id, id))
   }
+
+  async findAllByUserId(userId: string) {
+  const memberships = await db.query.organizationMembers.findMany({
+    where: { userId },
+    with: {
+      organization: { columns: { createdAt: false, updatedAt: false, ownerUserId: false } },
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+  return memberships.flatMap((m) =>
+    m.organization ? [{ ...m.organization, role: m.role }] : [],
+  )
+  }
+
+  async findByUserAndSlug(userId: string, slug: string) {
+    const org = await db.query.organizations.findFirst({
+      where: { slug },
+      columns: { createdAt: false, updatedAt: false, ownerUserId: false },
+    })
+    if (!org) return undefined
+
+    const membership = await db.query.organizationMembers.findFirst({
+      where: { organizationId: org.id, userId },
+      columns: { role: true },
+    })
+    return membership ? { ...org, role: membership.role } : undefined
+  }
 }
 
 export const organizationRepository = new OrganizationRepository()
+

@@ -18,4 +18,9 @@ export const OrganizationSchema = z.object({
   contactEmail: z.union([z.literal(''), z.email({ error: 'Correo no válido' })]),
 })
 
+export const UpdateOrganizationSchema = OrganizationSchema.extend({
+  organizationId: z.uuid({ error: 'Empresa inválida' }),
+})
+
+export type UpdateOrganizationInput = z.infer<typeof UpdateOrganizationSchema>
 export type OrganizationInput = z.infer<typeof OrganizationSchema>

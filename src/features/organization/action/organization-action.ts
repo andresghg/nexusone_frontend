@@ -1,7 +1,12 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
-import { OrganizationSchema, type OrganizationInput } from '../schemas/organizationSchema'
+import {
+  OrganizationSchema,
+  UpdateOrganizationSchema,
+  type OrganizationInput,
+  type UpdateOrganizationInput,
+} from '../schemas/organizationSchema'
 import { organizationService } from '../services/OrganizationService'
 
 async function getUserId() {
@@ -12,27 +17,28 @@ async function getUserId() {
 
 export async function createOrganizationAction(input: OrganizationInput) {
   const data = OrganizationSchema.safeParse(input)
-  if (!data.success) return { error: 'Datos inválidos', success: '' }
+  if (!data.success) return { error: 'Datos inválidos', success: '', slug: '' }
 
   const userId = await getUserId()
-  if (!userId) return { error: 'Sesión no válida', success: '' }
+  if (!userId) return { error: 'Sesión no válida', success: '', slug: '' }
 
   try {
     return await organizationService.create(userId, data.data)
   } catch {
-    return { error: 'No se pudo registrar la empresa', success: '' }
+    return { error: 'No se pudo registrar la empresa', success: '', slug: '' }
   }
 }
 
-export async function updateOrganizationAction(input: OrganizationInput) {
-  const data = OrganizationSchema.safeParse(input)
+export async function updateOrganizationAction(input: UpdateOrganizationInput) {
+  const data = UpdateOrganizationSchema.safeParse(input)
   if (!data.success) return { error: 'Datos inválidos', success: '' }
 
   const userId = await getUserId()
   if (!userId) return { error: 'Sesión no válida', success: '' }
 
   try {
-    return await organizationService.update(userId, data.data)
+    const { organizationId, ...organization } = data.data
+    return await organizationService.update(userId, organizationId, organization)
   } catch {
     return { error: 'No se pudo actualizar la empresa', success: '' }
   }

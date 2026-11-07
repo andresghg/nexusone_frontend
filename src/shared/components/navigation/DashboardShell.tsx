@@ -7,10 +7,11 @@ import { AppSidebar } from '@/shared/components/navigation/AppSidebar'
 import { navigationConfig } from '@/config/navigation'
 import { useSidebarState } from '@/hooks/use-sidebar-state'
 import { useTheme } from '@/hooks/use-theme'
-import { filterByPermissions } from '@/lib/navigation-utils'
-import { usePathname } from '@/lib/router-adapter'
+import { filterByPermissions, withBasePath } from '@/lib/navigation-utils'
 import { cn } from '@/lib/utils'
 import type { Permission } from '@/types/navigation'
+import type { OrganizationOption } from '@/shared/components/navigation/OrganizationSwitcher'
+
 
 /**
  * ============================================================================
@@ -27,33 +28,39 @@ import type { Permission } from '@/types/navigation'
  * ============================================================================
  */
 interface DashboardShellProps {
+  slug: string
+  organizations: OrganizationOption[]
+  canCreateOrganization: boolean
   permissions: Permission[]
   children: ReactNode
 }
 
-export function DashboardShell({ permissions, children }: DashboardShellProps) {
-  const pathname = usePathname()
+export function DashboardShell({ slug, organizations, canCreateOrganization, permissions, children }: DashboardShellProps) {
+  const basePath = `/dashboard/${slug}`
   const { theme, toggleTheme } = useTheme()
 
   const groups = useMemo(
-    () => filterByPermissions(navigationConfig, permissions),
-    [permissions],
+    () => withBasePath(filterByPermissions(navigationConfig, permissions), basePath),
+    [permissions, basePath],
   )
 
-  const sidebar = useSidebarState(groups, pathname)
+  const sidebar = useSidebarState(groups, basePath)
 
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-background">
         <AppSidebar
           groups={groups}
-          pathname={pathname}
+          pathname={basePath}
           collapsed={sidebar.collapsed}
           onToggleCollapsed={sidebar.toggleCollapsed}
           mobileOpen={sidebar.mobileOpen}
           onCloseMobile={sidebar.closeMobile}
           isGroupOpen={sidebar.isGroupOpen}
           onToggleGroup={sidebar.toggleGroup}
+          organizations={organizations}
+          currentSlug={slug}
+          canCreateOrganization={canCreateOrganization}
         />
 
         <div
@@ -64,7 +71,7 @@ export function DashboardShell({ permissions, children }: DashboardShellProps) {
         >
           <AppNavbar
             groups={groups}
-            pathname={pathname}
+            basePath={basePath}
             onOpenMobile={sidebar.openMobile}
             theme={theme}
             onToggleTheme={toggleTheme}

@@ -23,6 +23,7 @@ export const PERMISSIONS = [
   'pos.facturacion.read',
   'pos.facturacion.create',
   'pos.inventario.read',
+  'pos.inventario.write',
   'gestion.calendario.read',
   'gestion.tareas.read',
   'gestion.mensajeria.read',
