@@ -33,4 +33,17 @@ describe('resolvePermissions', () => {
   it('un rol desconocido no recibe nada', () => {
     expect(resolvePermissions('hacker', ALL_MODULES)).toEqual([])
   })
+
+  it('member lee inventario pero no puede modificarlo', () => {
+    const perms = resolvePermissions('member', ALL_MODULES)
+    expect(perms).toContain('pos.inventario.read')
+    expect(perms).not.toContain('pos.inventario.write')
+  })
+
+  it('sin el módulo pos activo nadie toca inventario', () => {
+    for (const role of ['owner', 'admin', 'member']) {
+      const perms = resolvePermissions(role, ['gestion', 'finanzas'])
+      expect(perms.filter((p) => p.startsWith('pos.'))).toEqual([])
+    }
+  })
 })
