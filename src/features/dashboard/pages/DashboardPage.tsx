@@ -14,7 +14,7 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Buenos días, Ana</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Panel Principal</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Resumen de tu operación — martes 18 de agosto
         </p>

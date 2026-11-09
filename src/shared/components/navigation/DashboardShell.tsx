@@ -11,6 +11,7 @@ import { filterByPermissions, withBasePath } from '@/lib/navigation-utils'
 import { cn } from '@/lib/utils'
 import type { Permission } from '@/types/navigation'
 import type { OrganizationOption } from '@/shared/components/navigation/OrganizationSwitcher'
+import type { CurrentUser } from '@/shared/types/CurrentUser'
 
 
 /**
@@ -33,9 +34,10 @@ interface DashboardShellProps {
   canCreateOrganization: boolean
   permissions: Permission[]
   children: ReactNode
+  currentUser: CurrentUser
 }
 
-export function DashboardShell({ slug, organizations, canCreateOrganization, permissions, children }: DashboardShellProps) {
+export function DashboardShell({ slug, organizations, canCreateOrganization, permissions, children, currentUser }: DashboardShellProps) {
   const basePath = `/dashboard/${slug}`
   const { theme, toggleTheme } = useTheme()
 
@@ -75,6 +77,7 @@ export function DashboardShell({ slug, organizations, canCreateOrganization, per
             onOpenMobile={sidebar.openMobile}
             theme={theme}
             onToggleTheme={toggleTheme}
+            currentUser={currentUser}
           />
 
           <main id="main-content" className="flex-1 p-4 md:p-6 lg:p-8">

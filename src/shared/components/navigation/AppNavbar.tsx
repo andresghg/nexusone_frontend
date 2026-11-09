@@ -16,6 +16,7 @@ import { signOutAction } from '@/features/auth/actions/auth-action'
 import { findBreadcrumbs } from '@/lib/navigation-utils'
 import type { NavigationGroup } from '@/types/navigation'
 import { GlobalSearch } from './GlobalSearch'
+import type { CurrentUser } from '@/shared/types/CurrentUser'
 
 interface AppNavbarProps {
   groups: NavigationGroup[]
@@ -23,11 +24,12 @@ interface AppNavbarProps {
   onOpenMobile: () => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
+  currentUser: CurrentUser
 }
 
 /**
  * Navbar superior — deliberadamente delgado.
- *
+*
  * Cada elemento justifica su existencia:
  * - Botón menú      → imprescindible en móvil (drawer).
  * - Breadcrumb      → orientación cuando el sidebar está colapsado u oculto.
@@ -36,7 +38,7 @@ interface AppNavbarProps {
  * - Notificaciones  → eventos operativos (stock bajo, cobros).
  * - Tema / usuario  → utilidades de sesión.
  */
-export function AppNavbar({ groups, basePath, onOpenMobile, theme, onToggleTheme }: AppNavbarProps) {
+export function AppNavbar({ groups, basePath, onOpenMobile, theme, onToggleTheme, currentUser }: AppNavbarProps) {
   const breadcrumbs = findBreadcrumbs(groups, basePath)
 
   return (
@@ -117,14 +119,14 @@ export function AppNavbar({ groups, basePath, onOpenMobile, theme, onToggleTheme
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Perfil de usuario" className="size-9">
               <Avatar className="size-7">
-                <AvatarFallback className="text-xs">AG</AvatarFallback>
+                <AvatarFallback className="text-xs">{currentUser.name?.charAt(0)}</AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
-              <p className="text-sm font-medium">Ana García</p>
-              <p className="text-xs font-normal text-muted-foreground">ana@nexusone.co — Admin</p>
+              <p className="text-sm font-medium">{currentUser.name}</p>
+              <p className="text-xs font-normal text-muted-foreground">{currentUser.email} — {currentUser.roleLabel}</p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Mi perfil</DropdownMenuItem>
