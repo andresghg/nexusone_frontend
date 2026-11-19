@@ -16,18 +16,20 @@ import { signOutAction } from '@/features/auth/actions/auth-action'
 import { findBreadcrumbs } from '@/lib/navigation-utils'
 import type { NavigationGroup } from '@/types/navigation'
 import { GlobalSearch } from './GlobalSearch'
+import type { CurrentUser } from '@/shared/types/CurrentUser'
 
 interface AppNavbarProps {
   groups: NavigationGroup[]
-  pathname: string
+  basePath: string
   onOpenMobile: () => void
   theme: 'light' | 'dark'
   onToggleTheme: () => void
+  currentUser: CurrentUser
 }
 
 /**
  * Navbar superior — deliberadamente delgado.
- *
+*
  * Cada elemento justifica su existencia:
  * - Botón menú      → imprescindible en móvil (drawer).
  * - Breadcrumb      → orientación cuando el sidebar está colapsado u oculto.
@@ -36,8 +38,8 @@ interface AppNavbarProps {
  * - Notificaciones  → eventos operativos (stock bajo, cobros).
  * - Tema / usuario  → utilidades de sesión.
  */
-export function AppNavbar({ groups, pathname, onOpenMobile, theme, onToggleTheme }: AppNavbarProps) {
-  const breadcrumbs = findBreadcrumbs(groups, pathname)
+export function AppNavbar({ groups, basePath, onOpenMobile, theme, onToggleTheme, currentUser }: AppNavbarProps) {
+  const breadcrumbs = findBreadcrumbs(groups, basePath)
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -74,7 +76,7 @@ export function AppNavbar({ groups, pathname, onOpenMobile, theme, onToggleTheme
 
         {/* Acción principal del POS: visible, pero sin competir con la navegación */}
         <Button size="sm" asChild className="hidden h-9 gap-1.5 sm:inline-flex">
-          <AppLink href="/dashboard/pos/facturacion/nueva">
+          <AppLink href={`${basePath}/pos/facturacion/nueva`}>
             <Plus className="size-4" aria-hidden />
             Nueva factura
           </AppLink>
@@ -117,14 +119,14 @@ export function AppNavbar({ groups, pathname, onOpenMobile, theme, onToggleTheme
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" aria-label="Perfil de usuario" className="size-9">
               <Avatar className="size-7">
-                <AvatarFallback className="text-xs">AG</AvatarFallback>
+                <AvatarFallback className="text-xs">{currentUser.name?.charAt(0)}</AvatarFallback>
               </Avatar>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
-              <p className="text-sm font-medium">Ana García</p>
-              <p className="text-xs font-normal text-muted-foreground">ana@nexusone.co — Admin</p>
+              <p className="text-sm font-medium">{currentUser.name}</p>
+              <p className="text-xs font-normal text-muted-foreground">{currentUser.email} — {currentUser.roleLabel}</p>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem>Mi perfil</DropdownMenuItem>

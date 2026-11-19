@@ -44,19 +44,26 @@ export function OrganizationForm({ organization }: Props) {
   })
 
   const onSubmit = async (data: OrganizationInput) => {
-    const { error, success } = isEdit
-      ? await updateOrganizationAction(data)
-      : await createOrganizationAction(data)
-
+  if (organization) {
+    const { error, success } = await updateOrganizationAction({ ...data, organizationId: organization.id })
     if (error) {
       toast.error(error)
       return
     }
     toast.success(success)
-    if (!isEdit) router.replace('/dashboard')
     router.refresh()
-
+    return
   }
+
+  const { error, success, slug } = await createOrganizationAction(data)
+  if (error) {
+    toast.error(error)
+    return
+  }
+  toast.success(success)
+  router.replace(`/dashboard/${slug}`)
+  router.refresh()
+}
 
   return (
     <div className="mx-auto max-w-xl space-y-6">

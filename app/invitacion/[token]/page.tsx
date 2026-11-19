@@ -4,7 +4,6 @@ import { CardContent, CardDescription, CardHeader, CardTitle } from '@/shared/co
 import { Button } from '@/shared/components/ui/button'
 import { generatePageTitle } from '@/shared/utils/metadata'
 import { createClient } from '@/lib/supabase/server'
-import { getCurrentOrganization } from '@/features/organization/utils/getCurrentOrganization'
 import { invitationService } from '@/features/organization/services/InvitationService'
 import { InvitationAccept } from '@/features/organization/components/InvitationAccept'
 import { ROLE_LABEL } from '@/features/organization/permissions'
@@ -13,7 +12,11 @@ export const metadata: Metadata = { title: generatePageTitle('Invitación') }
 
 export default async function Page({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  const invitation = await invitationService.preview(token)
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  const invitation = await invitationService.preview(token, user?.id)
 
   if (!invitation) {
     return (
@@ -27,8 +30,6 @@ export default async function Page({ params }: { params: Promise<{ token: string
   }
 
   const role = (ROLE_LABEL[invitation.role] ?? invitation.role).toLowerCase()
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
   // Sin sesión: elegir entre crear cuenta o iniciar sesión, conservando el enlace
   if (!user) {
@@ -53,16 +54,13 @@ export default async function Page({ params }: { params: Promise<{ token: string
     )
   }
 
-  // Con sesión pero ya en una empresa (regla: una empresa por usuario)
-  const { organization } = await getCurrentOrganization()
-  if (organization) {
+  // Con sesión, pero ya es miembro de ESA empresa (de otras no importa)
+  if (invitation.alreadyMember) {
     return (
       <>
         <CardHeader>
-          <CardTitle className="text-xl">Ya perteneces a una empresa</CardTitle>
-          <CardDescription>
-            Para aceptar esta invitación necesitas una cuenta que no tenga empresa asignada.
-          </CardDescription>
+          <CardTitle className="text-xl">Ya perteneces a {invitation.organizationName}</CardTitle>
+          <CardDescription>Esta invitación no es necesaria con tu cuenta actual.</CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild variant="outline" className="w-full">

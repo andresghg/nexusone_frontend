@@ -7,6 +7,8 @@ const MEMBER_PERMISSIONS: readonly Permission[] = [
   'dashboard.read',
   'pos.facturacion.read',
   'pos.facturacion.create',
+  'pos.clientes.read',
+  'pos.clientes.write',
   'pos.inventario.read',
   'gestion.calendario.read',
   'gestion.tareas.read',

@@ -8,7 +8,7 @@ export const getCurrentOrganization = cache(async () => {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const organization = (await organizationRepository.findByUserId(user.id)) ?? null
+  const organization = (await organizationRepository.findByUserAndId(user.id, '')) ?? null
   return { user, organization }
 })
 
