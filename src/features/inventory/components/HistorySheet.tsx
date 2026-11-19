@@ -11,13 +11,20 @@ import {
 } from '@/shared/components/ui/sheet'
 import { Skeleton } from '@/shared/components/ui/skeleton'
 import { cn } from '@/lib/utils'
-import { HISTORY_LIMIT, type HistoryResult, type MovementType, type ProductRow } from '../types/inventory'
+import {
+  HISTORY_LIMIT,
+  type HistoryMovementType,
+  type HistoryResult,
+  type ProductRow,
+} from '../types/inventory'
 import { formatDateTime, formatStock } from '../utils/format'
 
-const TYPE_LABEL: Record<MovementType, string> = {
+const TYPE_LABEL: Record<HistoryMovementType, string> = {
   in: 'Entrada',
   out: 'Salida',
   adjustment: 'Ajuste',
+  sale: 'Venta',
+  sale_void: 'Anulación',
 }
 
 function HistoryList({ history, unit }: { history: Promise<HistoryResult>; unit: string }) {

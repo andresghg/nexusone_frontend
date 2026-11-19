@@ -46,4 +46,35 @@ describe('resolvePermissions', () => {
       expect(perms.filter((p) => p.startsWith('pos.'))).toEqual([])
     }
   })
+
+  it('configurar la facturación es solo de owner y admin', () => {
+    expect(resolvePermissions('owner', ALL_MODULES)).toContain('pos.facturacion.configure')
+    expect(resolvePermissions('admin', ALL_MODULES)).toContain('pos.facturacion.configure')
+    expect(resolvePermissions('member', ALL_MODULES)).not.toContain('pos.facturacion.configure')
+  })
+
+  it('clientes: todos los roles leen y modifican, y solo con el módulo pos activo', () => {
+    for (const role of ['owner', 'admin', 'member']) {
+      const perms = resolvePermissions(role, ALL_MODULES)
+      expect(perms).toContain('pos.clientes.read')
+      expect(perms).toContain('pos.clientes.write')
+    }
+    const withoutPos = resolvePermissions('owner', ['gestion', 'finanzas'])
+    expect(withoutPos).not.toContain('pos.clientes.read')
+    expect(withoutPos).not.toContain('pos.clientes.write')
+  })
+
+  it('anular documentos es solo de owner y admin', () => {
+    expect(resolvePermissions('owner', ALL_MODULES)).toContain('pos.facturacion.void')
+    expect(resolvePermissions('admin', ALL_MODULES)).toContain('pos.facturacion.void')
+    expect(resolvePermissions('member', ALL_MODULES)).not.toContain('pos.facturacion.void')
+    // emitir sí lo puede hacer quien factura
+    expect(resolvePermissions('member', ALL_MODULES)).toContain('pos.facturacion.create')
+  })
+
+  it('ajustar precios (descuentos e impuesto por línea) es solo de owner y admin', () => {
+    expect(resolvePermissions('owner', ALL_MODULES)).toContain('pos.facturacion.adjust')
+    expect(resolvePermissions('admin', ALL_MODULES)).toContain('pos.facturacion.adjust')
+    expect(resolvePermissions('member', ALL_MODULES)).not.toContain('pos.facturacion.adjust')
+  })
 })

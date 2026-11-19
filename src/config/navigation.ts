@@ -4,6 +4,8 @@ import {
   Building2,
   CalendarDays,
   CheckSquare,
+  Contact,
+  FileCog,
   LayoutDashboard,
   MessagesSquare,
   Package,
@@ -59,6 +61,13 @@ export const navigationConfig: NavigationGroup[] = [
             href: `${DASHBOARD}/pos/facturacion`,
             permissions: ['pos.facturacion.read'],
             description: 'Facturas, clientes y cobros',
+          },
+          {
+            id: 'pos-clientes',
+            label: 'Clientes',
+            icon: Contact,
+            href: `${DASHBOARD}/pos/clientes`,
+            permissions: ['pos.clientes.read'],
           },
           {
             id: 'pos-inventario',
@@ -152,6 +161,13 @@ export const navigationConfig: NavigationGroup[] = [
             icon: Building2,
             href: `${DASHBOARD}/configuracion/empresa`,
             permissions: ['config.empresa.read'],
+          },
+          {
+            id: 'config-facturacion',
+            label: 'Facturación',
+            icon: FileCog,
+            href: `${DASHBOARD}/configuracion/facturacion`,
+            permissions: ['pos.facturacion.configure'],
           },
           {
             id: 'config-usuarios',

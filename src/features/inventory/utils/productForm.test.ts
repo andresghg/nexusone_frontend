@@ -5,7 +5,7 @@ import { emptyProductValues, productToFormValues } from './productForm'
 
 const row = (over: Partial<ProductRow> = {}): ProductRow => ({
   id: 'p-1', sku: 'COLA', barcode: null, name: 'Cola 1L', description: null, unit: 'un',
-  price: 1500, cost: 900, minStock: 2, trackStock: true, active: true,
+  price: 1500, cost: 900, taxRate: null, minStock: 2, trackStock: true, active: true,
   categoryId: null, categoryName: null, stock: 5, createdAt: '2026-11-01T00:00:00.000Z',
   ...over,
 })
@@ -23,6 +23,22 @@ describe('emptyProductValues', () => {
 
   it('con SKU y nombre pasa la validación', () => {
     expect(ProductFormSchema.safeParse({ ...emptyProductValues(), sku: 'A', name: 'B' }).success).toBe(true)
+  })
+})
+
+describe('impuesto del producto en el formulario', () => {
+  it('un producto nuevo parte sin impuesto propio (usa la tasa de la empresa)', () => {
+    expect(emptyProductValues().taxRate).toBe('')
+  })
+
+  it('null se edita como vacío, 0 (exento) como "0" y una tasa como texto', () => {
+    expect(productToFormValues(row({ taxRate: null })).taxRate).toBe('')
+    expect(productToFormValues(row({ taxRate: 0 })).taxRate).toBe('0')
+    expect(productToFormValues(row({ taxRate: 10.5 })).taxRate).toBe('10.5')
+  })
+
+  it('vacío y 0 son cosas distintas: "usa la tasa de la empresa" y "exento"', () => {
+    expect(productToFormValues(row({ taxRate: null })).taxRate).not.toBe(productToFormValues(row({ taxRate: 0 })).taxRate)
   })
 })
 

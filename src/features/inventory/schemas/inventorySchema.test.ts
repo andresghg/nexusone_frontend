@@ -12,7 +12,7 @@ const PRODUCT = '22222222-2222-4222-8222-222222222222'
 
 const product = (over: Record<string, unknown> = {}) => ({
   sku: 'COLA-1L', barcode: '', name: 'Cola 1L', description: '', unit: 'un', categoryId: '',
-  price: 1500, cost: 900, minStock: 2, trackStock: true, active: true,
+  price: 1500, cost: 900, taxRate: '', minStock: 2, trackStock: true, active: true,
   ...over,
 })
 
@@ -77,6 +77,21 @@ describe('ProductSchema', () => {
   it('rechaza precios negativos o que no son número', () => {
     expect(ProductSchema.safeParse(product({ price: -1 })).success).toBe(false)
     expect(ProductSchema.safeParse(product({ price: Number.NaN })).success).toBe(false)
+  })
+
+  it('el impuesto propio puede ir vacío (tasa de la empresa), ser 0 (exento) o una tasa de hasta 2 decimales', () => {
+    for (const taxRate of ['', '0', '19', '10.5', '10,5', '10.50', '7,25', '100', ' 19 ']) {
+      expect(ProductSchema.safeParse(product({ taxRate })).success, JSON.stringify(taxRate)).toBe(true)
+    }
+  })
+
+  it('rechaza un impuesto que no es una tasa válida', () => {
+    const message = 'El impuesto debe ser un número entre 0 y 100, con máximo 2 decimales'
+    for (const taxRate of ['abc', '-1', '101', '100.01', '10.555', '1e2', '19%', '1,2,3', ',5', '.']) {
+      const result = ProductSchema.safeParse(product({ taxRate }))
+      expect(result.success, JSON.stringify(taxRate)).toBe(false)
+      expect(firstError(result), JSON.stringify(taxRate)).toBe(message)
+    }
   })
 
   it('la categoría puede ir vacía o ser un uuid', () => {

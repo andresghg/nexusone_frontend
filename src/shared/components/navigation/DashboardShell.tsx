@@ -35,16 +35,39 @@ interface DashboardShellProps {
   permissions: Permission[]
   children: ReactNode
   currentUser: CurrentUser
+  lowStockCount: number
 }
 
-export function DashboardShell({ slug, organizations, canCreateOrganization, permissions, children, currentUser }: DashboardShellProps) {
+export function DashboardShell({ slug, organizations, canCreateOrganization, permissions, children, currentUser, lowStockCount }: DashboardShellProps) {
   const basePath = `/dashboard/${slug}`
   const { theme, toggleTheme } = useTheme()
 
-  const groups = useMemo(
-    () => withBasePath(filterByPermissions(navigationConfig, permissions), basePath),
-    [permissions, basePath],
-  )
+  const groups = useMemo(() => {
+  const filtered = filterByPermissions(navigationConfig, permissions)
+
+  const withBadges = filtered.map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({
+      ...item,
+      children: item.children?.map((child) =>
+        child.id === 'pos-inventario'
+          ? {
+              ...child,
+              badge:
+                lowStockCount > 0
+                  ? {
+                      label: String(lowStockCount),
+                      variant: 'destructive' as const,
+                    }
+                  : undefined,
+            }
+          : child,
+      ),
+    })),
+  }))
+
+  return withBasePath(withBadges, basePath)
+}, [permissions, basePath, lowStockCount])
 
   const sidebar = useSidebarState(groups, basePath)
 

@@ -201,6 +201,23 @@ export function ProductFormSheet({ open, onOpenChange, organizationId, categorie
               </Field>
             </div>
 
+            <div className="sm:max-w-xs">
+              <Field
+                label="Impuesto (%)"
+                htmlFor="taxRate"
+                error={errors.taxRate?.message}
+                hint="Vacío: usa la tasa de la empresa. Escribe 0 si el producto está exento."
+              >
+                <Input
+                  id="taxRate"
+                  inputMode="decimal"
+                  autoComplete="off"
+                  placeholder="Tasa de la empresa"
+                  {...register('taxRate')}
+                />
+              </Field>
+            </div>
+
             <Field label="Descripción" htmlFor="description" error={errors.description?.message}>
               <Textarea id="description" rows={3} {...register('description')} />
             </Field>

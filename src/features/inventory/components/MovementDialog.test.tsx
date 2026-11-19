@@ -15,7 +15,7 @@ const PRODUCT_ID = '22222222-2222-4222-8222-222222222222'
 
 const product: ProductRow = {
   id: PRODUCT_ID, sku: 'COLA', barcode: null, name: 'Cola 1L', description: null, unit: 'un',
-  price: 1500, cost: 900, minStock: 2, trackStock: true, active: true,
+  price: 1500, cost: 900, taxRate: null, minStock: 2, trackStock: true, active: true,
   categoryId: null, categoryName: null, stock: 10, createdAt: '2026-11-01T00:00:00.000Z',
 }
 

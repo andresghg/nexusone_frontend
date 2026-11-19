@@ -45,6 +45,8 @@ export const products = pgTable(
     unit: text("unit").notNull().default("un"),
     price: numeric("price", { precision: 14, scale: 2 }).notNull().default("0"),
     cost: numeric("cost", { precision: 14, scale: 2 }).notNull().default("0"),
+    // Impuesto propio del producto, en %. Null = la tasa de la empresa; 0 = exento.
+    taxRate: numeric("tax_rate", { precision: 5, scale: 2 }),
     minStock: numeric("min_stock", { precision: 14, scale: 3 }).notNull().default("0"),
     trackStock: boolean("track_stock").notNull().default(true),
     active: boolean("active").notNull().default(true),
@@ -76,11 +78,17 @@ export const stockMovements = pgTable(
     type: text("type").notNull(),
     delta: numeric("delta", { precision: 14, scale: 3 }).notNull(),
     reason: text("reason"),
+    // Documento que originó el movimiento (hoy: 'invoice'). Null en los manuales.
+    referenceType: text("reference_type"),
+    referenceId: uuid("reference_id"),
     createdBy: uuid("created_by").references(() => authUsers.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
     index("stock_movements_product_idx").on(t.organizationId, t.productId, t.createdAt),
+    index("stock_movements_reference_idx")
+      .on(t.organizationId, t.referenceType, t.referenceId)
+      .where(sql`${t.referenceId} is not null`),
     foreignKey({
       columns: [t.organizationId, t.productId],
       foreignColumns: [products.organizationId, products.id],

@@ -7,6 +7,7 @@ export type ProductRow = {
   unit: string
   price: number
   cost: number
+  taxRate: number | null // impuesto propio en %; null = usa la tasa de la empresa, 0 = exento
   minStock: number
   trackStock: boolean
   active: boolean
@@ -28,7 +29,12 @@ export type CategoryRow = {
 // Cuántos movimientos recientes muestra el historial de un producto
 export const HISTORY_LIMIT = 50
 
+// Movimientos que una persona registra a mano (diálogo de movimientos)
 export type MovementType = 'in' | 'out' | 'adjustment'
+
+// Lo que puede aparecer en el historial: además de los manuales, los que genera la facturación
+// ('sale' al emitir un documento, 'sale_void' al anularlo). Nunca se registran a mano.
+export type HistoryMovementType = MovementType | 'sale' | 'sale_void'
 
 // Entrada/salida: `quantity` es la cantidad que entra o sale.
 // Ajuste: `quantity` es el stock real contado; el sistema calcula la diferencia.
@@ -41,7 +47,7 @@ export type MovementInput = {
 
 export type MovementRow = {
   id: string
-  type: MovementType
+  type: HistoryMovementType
   delta: number
   reason: string | null
   createdAt: string // ISO

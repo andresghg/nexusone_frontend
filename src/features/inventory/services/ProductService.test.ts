@@ -18,6 +18,7 @@ const input = (over: Partial<ProductInput> = {}): ProductInput => ({
   categoryId: '',
   price: 1500,
   cost: 900.5,
+  taxRate: '',
   minStock: 2,
   trackStock: true,
   active: true,
@@ -117,6 +118,7 @@ describe('ProductService.create', () => {
       unit: 'un',
       price: '1500.00',
       cost: '900.50',
+      taxRate: null,
       minStock: '2.000',
       trackStock: true,
       active: true,
@@ -152,6 +154,43 @@ describe('ProductService.create', () => {
     const { products, service } = setup()
     products.create.mockRejectedValue(new Error('boom'))
     await expect(service.create('u1', ORG_ID, input())).rejects.toThrow('boom')
+  })
+})
+
+describe('ProductService.create · impuesto del producto', () => {
+  const sentTaxRate = async (taxRate: string) => {
+    const { products, service } = setup()
+    expect((await service.create('u1', ORG_ID, input({ taxRate }))).error).toBe('')
+    return products.create.mock.calls[0][1].taxRate
+  }
+
+  it('vacío se guarda como null: el producto usa la tasa de la empresa', async () => {
+    expect(await sentTaxRate('')).toBeNull()
+    expect(await sentTaxRate('   ')).toBeNull()
+  })
+
+  it('0 se guarda como "0.00": el producto está exento (no es lo mismo que vacío)', async () => {
+    expect(await sentTaxRate('0')).toBe('0.00')
+  })
+
+  it('una tasa se guarda con 2 decimales, aceptando coma', async () => {
+    expect(await sentTaxRate('19')).toBe('19.00')
+    expect(await sentTaxRate('10,5')).toBe('10.50')
+    expect(await sentTaxRate('7.25')).toBe('7.25')
+  })
+
+  it('un valor que no es una tasa nunca se guarda (ni como exento por accidente)', async () => {
+    for (const taxRate of ['abc', '-1', '101', '10.555', '1e2', 'NaN']) {
+      const { products, service } = setup()
+      await expect(service.create('u1', ORG_ID, input({ taxRate })), taxRate).rejects.toThrow('Impuesto inválido')
+      expect(products.create).not.toHaveBeenCalled()
+    }
+  })
+
+  it('al actualizar también se guarda', async () => {
+    const { products, service } = setup()
+    await service.update('u1', ORG_ID, 'p-1', input({ taxRate: '0' }))
+    expect(products.update.mock.calls[0][2].taxRate).toBe('0.00')
   })
 })
 

@@ -53,6 +53,25 @@ describe('HistorySheet', () => {
     expect(screen.getByText(/Usuario desconocido ·/)).toBeTruthy()
   })
 
+  it('muestra las ventas y anulaciones que genera la facturación, con el documento como motivo', async () => {
+    await renderSheet(
+      Promise.resolve({
+        error: '',
+        items: [
+          movement({ id: 'm-1', type: 'sale_void', delta: 2, reason: 'Anulación Factura F-000012' }),
+          movement({ id: 'm-2', type: 'sale', delta: -2, reason: 'Factura F-000012' }),
+        ],
+      }),
+    )
+
+    expect(await screen.findByText('Venta')).toBeTruthy()
+    expect(screen.getByText('Anulación')).toBeTruthy()
+    expect(screen.getByText('Factura F-000012')).toBeTruthy()
+    expect(screen.getByText('Anulación Factura F-000012')).toBeTruthy()
+    expect(screen.getByText('+2 un').className).toContain('emerald') // la anulación devuelve stock
+    expect(screen.getByText('-2 un').className).toContain('destructive')
+  })
+
   it('colorea las entradas y las salidas de forma distinta', async () => {
     await renderSheet(
       Promise.resolve({ error: '', items: [movement(), movement({ id: 'm-2', type: 'out', delta: -2 })] }),

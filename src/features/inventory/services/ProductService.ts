@@ -26,6 +26,19 @@ const NO_WRITE = 'No tienes permisos para modificar el inventario'
 
 // Normaliza lo que viene del formulario: SKU en mayúsculas, vacíos a null,
 // y números como texto con los decimales de la base de datos.
+// Impuesto propio: vacío = usa la tasa de la empresa (null); "0" = exento; otro valor = esa tasa.
+// El schema de la acción ya lo validó; aquí se vuelve a comprobar para que un valor raro nunca se
+// guarde como exento por accidente.
+function toTaxRate(text: string): string | null {
+  const value = text.trim()
+  if (value === '') return null
+  const rate = Number(value.replace(',', '.'))
+  if (!/^\d+([.,]\d{1,2})?$/.test(value) || !Number.isFinite(rate) || rate > 100) {
+    throw new RangeError('Impuesto inválido')
+  }
+  return rate.toFixed(2)
+}
+
 const toData = (d: ProductInput): ProductData => ({
   categoryId: d.categoryId || null,
   sku: d.sku.trim().toUpperCase(),
@@ -35,6 +48,7 @@ const toData = (d: ProductInput): ProductData => ({
   unit: d.unit,
   price: d.price.toFixed(2),
   cost: d.cost.toFixed(2),
+  taxRate: toTaxRate(d.taxRate),
   minStock: d.minStock.toFixed(3),
   trackStock: d.trackStock,
   active: d.active,
@@ -126,6 +140,18 @@ export class ProductService {
     if (!updated) return fail('El producto no existe')
     return { error: '', success: active ? 'Producto restaurado' : 'Producto archivado' }
   }
+
+  async getLowStockCount(userId: string, organizationId: string): Promise<number> {
+  const access = await this.access.authorize(
+    userId,
+    organizationId,
+    'pos.inventario.read',
+  )
+
+  if (!access) return 0
+
+  return this.products.getLowStockCount(access.organizationId)
+}
 }
 
 export const productService = new ProductService(productRepository, accessService)

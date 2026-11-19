@@ -19,7 +19,7 @@ const categories: CategoryRow[] = [{ id: CAT, name: 'Bebidas', productCount: 2 }
 
 const existing: ProductRow = {
   id: '22222222-2222-4222-8222-222222222222', sku: 'COLA', barcode: '7801', name: 'Cola 1L',
-  description: 'Botella', unit: 'lt', price: 1500, cost: 900, minStock: 2, trackStock: true,
+  description: 'Botella', unit: 'lt', price: 1500, cost: 900, taxRate: null, minStock: 2, trackStock: true,
   active: true, categoryId: CAT, categoryName: 'Bebidas', stock: 10, createdAt: '2026-11-01T00:00:00.000Z',
 }
 
@@ -90,12 +90,60 @@ describe('ProductFormSheet · crear', () => {
       categoryId: '',
       price: 1500,
       cost: 900.5,
+      taxRate: '',
       minStock: 2,
       trackStock: true,
       active: true,
       initialStock: 10,
     })
     expect(toast.success).toHaveBeenCalledWith('Producto creado')
+  })
+
+  it('el impuesto del producto: vacío usa la tasa de la empresa y el campo lo explica', () => {
+    setup()
+    expect(field('Impuesto (%)').value).toBe('')
+    expect(field('Impuesto (%)').placeholder).toBe('Tasa de la empresa')
+    expect(screen.getByText('Vacío: usa la tasa de la empresa. Escribe 0 si el producto está exento.')).toBeTruthy()
+  })
+
+  it('un producto exento se envía con impuesto "0", distinto de vacío', async () => {
+    create.mockResolvedValue({ error: '', success: 'Producto creado' })
+    const { user } = setup()
+    await fill(user, 'SKU', 'LIBRO')
+    await fill(user, 'Nombre', 'Libro')
+    await fill(user, 'Impuesto (%)', '0')
+    await user.click(screen.getByRole('button', { name: 'Crear producto' }))
+
+    await waitFor(() => expect(create).toHaveBeenCalled())
+    expect(create.mock.calls[0][0].taxRate).toBe('0')
+  })
+
+  it('acepta coma decimal en el impuesto y rechaza lo que no es una tasa', async () => {
+    create.mockResolvedValue({ error: '', success: 'Producto creado' })
+    const { user } = setup()
+    await fill(user, 'SKU', 'A')
+    await fill(user, 'Nombre', 'B')
+
+    await fill(user, 'Impuesto (%)', '150')
+    await user.click(screen.getByRole('button', { name: 'Crear producto' }))
+    expect(await screen.findByText('El impuesto debe ser un número entre 0 y 100, con máximo 2 decimales')).toBeTruthy()
+    expect(create).not.toHaveBeenCalled()
+
+    await fill(user, 'Impuesto (%)', '10,5')
+    await user.click(screen.getByRole('button', { name: 'Crear producto' }))
+    await waitFor(() => expect(create).toHaveBeenCalled())
+    expect(create.mock.calls[0][0].taxRate).toBe('10,5')
+  })
+
+  it('al editar muestra el impuesto propio del producto; sin impuesto propio, vacío', () => {
+    setup({ ...existing, taxRate: 10.5 })
+    expect(field('Impuesto (%)').value).toBe('10.5')
+    cleanup()
+    setup({ ...existing, taxRate: 0 })
+    expect(field('Impuesto (%)').value).toBe('0')
+    cleanup()
+    setup({ ...existing, taxRate: null })
+    expect(field('Impuesto (%)').value).toBe('')
   })
 
   it('rechaza un precio negativo y un stock inicial con más de 3 decimales', async () => {

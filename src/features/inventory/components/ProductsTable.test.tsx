@@ -20,7 +20,7 @@ const noFilters: InventoryQuery = { q: '', category: '', status: 'active', low: 
 
 const product = (over: Partial<ProductRow> = {}): ProductRow => ({
   id: 'p-1', sku: 'COLA', barcode: null, name: 'Cola 1L', description: null, unit: 'un',
-  price: 1500, cost: 900, minStock: 2, trackStock: true, active: true,
+  price: 1500, cost: 900, taxRate: null, minStock: 2, trackStock: true, active: true,
   categoryId: 'c-1', categoryName: 'Bebidas', stock: 10, createdAt: '2026-11-01T00:00:00.000Z',
   ...over,
 })

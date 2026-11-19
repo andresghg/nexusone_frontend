@@ -13,6 +13,7 @@ export type ProductData = {
   unit: string
   price: string
   cost: string
+  taxRate: string | null
   minStock: string
   trackStock: boolean
   active: boolean
@@ -40,6 +41,7 @@ export interface IProductRepository {
   create(organizationId: string, data: ProductData, initial?: InitialStock): Promise<{ id: string }>
   update(organizationId: string, productId: string, data: ProductData): Promise<boolean>
   setActive(organizationId: string, productId: string, active: boolean): Promise<boolean>
+  getLowStockCount(organizationId: string): Promise<number>
 }
 
 // Escapa los comodines de LIKE para que "50%" busque literalmente "50%".
@@ -104,6 +106,7 @@ class ProductRepository implements IProductRepository {
         unit: products.unit,
         price: products.price,
         cost: products.cost,
+        taxRate: products.taxRate,
         minStock: products.minStock,
         trackStock: products.trackStock,
         active: products.active,
@@ -139,6 +142,7 @@ class ProductRepository implements IProductRepository {
       ...r,
       price: Number(r.price),
       cost: Number(r.cost),
+      taxRate: r.taxRate === null ? null : Number(r.taxRate),
       minStock: Number(r.minStock),
       stock: Number(r.stock),
       createdAt: r.createdAt.toISOString(),
@@ -220,6 +224,22 @@ class ProductRepository implements IProductRepository {
       .returning({ id: products.id })
     return rows.length > 0
   }
+
+  async getLowStockCount(organizationId: string): Promise<number> {
+  const { stock, where } = this.base(organizationId, {
+    status: 'active',
+    lowStock: true,
+  })
+
+  const [result] = await db
+    .with(stock)
+    .select({ total: count() })
+    .from(products)
+    .leftJoin(stock, eq(stock.productId, products.id))
+    .where(where)
+
+  return result.total
+}
 }
 
 export const productRepository = new ProductRepository()

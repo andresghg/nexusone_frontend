@@ -3,9 +3,9 @@ import { db } from '@/db'
 import { products, profiles, stockMovements } from '@/db/schema'
 import {
   HISTORY_LIMIT,
+  type HistoryMovementType,
   type MovementPlan,
   type MovementRow,
-  type MovementType,
   type StockState,
 } from '../types/inventory'
 import { milliToNumber, toMilli } from '../utils/stockMath'
@@ -102,7 +102,7 @@ class StockRepository implements IStockRepository {
 
     return rows.map((r): MovementRow => ({
       id: r.id,
-      type: r.type as MovementType,
+      type: r.type as HistoryMovementType,
       delta: Number(r.delta),
       reason: r.reason,
       createdAt: r.createdAt.toISOString(),

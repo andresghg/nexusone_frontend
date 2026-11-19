@@ -22,6 +22,15 @@ const quantity = (label: string) =>
       error: `${label}: máximo 3 decimales`,
     })
 
+// Impuesto propio del producto, en %. Se escribe como texto porque vacío significa "usa la tasa de la
+// empresa" y 0 significa "exento": son cosas distintas. Acepta coma o punto, hasta 2 decimales.
+const taxRate = z
+  .string()
+  .trim()
+  .refine((value) => value === '' || (/^\d+([.,]\d{1,2})?$/.test(value) && Number(value.replace(',', '.')) <= 100), {
+    error: 'El impuesto debe ser un número entre 0 y 100, con máximo 2 decimales',
+  })
+
 // Campos del formulario de producto. Los opcionales llegan como '' y el service los guarda como null.
 export const ProductSchema = z.object({
   sku: z.string().trim()
@@ -36,6 +45,7 @@ export const ProductSchema = z.object({
   categoryId: z.union([z.literal(''), z.uuid({ error: 'Categoría inválida' })]),
   price: amount('El precio'),
   cost: amount('El costo'),
+  taxRate,
   minStock: quantity('El stock mínimo'),
   trackStock: z.boolean(),
   active: z.boolean(),
