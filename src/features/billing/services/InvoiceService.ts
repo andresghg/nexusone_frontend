@@ -9,22 +9,27 @@ import {
 import { formatQuantity } from '@/features/inventory/utils/stockMath'
 import {
   AddPaymentSchema,
+  IssueCreditNoteSchema,
   IssueInvoiceSchema,
   VoidInvoiceSchema,
   VoidPaymentSchema,
   type AddPaymentInput,
+  type IssueCreditNoteInput,
   type IssueInvoiceInput,
   type VoidInvoiceInput,
   type VoidPaymentInput,
 } from '../schemas/invoiceSchema'
 import { DEFAULT_BILLING_SETTINGS, type BillingSettings } from '../types/billing'
 import type {
+  CreditContext,
   CustomerSnapshot,
   InvoiceDetail,
   InvoiceListDisplay,
   InvoiceListFilters,
   InvoicePage,
   IssueCommand,
+  IssueCreditNoteCommand,
+  IssuedCreditNote,
   IssuedInvoice,
   IssueLineCommand,
   ProductOption,
@@ -42,6 +47,7 @@ import {
 import { invoiceRepository, type IInvoiceRepository, type Pagination } from './InvoiceRepository'
 
 export type IssueResponse = { error: string; success: string; invoice?: IssuedInvoice }
+export type CreditNoteResponse = { error: string; success: string; creditNote?: IssuedCreditNote }
 
 const fail = (error: string) => ({ error, success: '' })
 
@@ -164,6 +170,8 @@ export class InvoiceService {
         return fail(outcome.current === 'void' ? 'El documento está anulado' : 'Solo se pueden cobrar documentos emitidos')
       case 'settled':
         return fail('El documento ya está pagado')
+      case 'credit_note':
+        return fail('Una nota de crédito no recibe cobros')
       case 'exceeds_balance':
         return fail(
           `El monto supera el saldo pendiente (${money(outcome.balance, outcome.currency, outcome.currencyDecimals)})`,
@@ -359,6 +367,67 @@ export class InvoiceService {
     }
   }
 
+  /**
+   * Las líneas de un documento con lo ya acreditado, para armar la nota de crédito. Crear notas queda
+   * reservado a quien puede anular documentos (corrigen un documento emitido): sin permiso o si el
+   * documento no se puede acreditar devuelve null.
+   */
+  async getCreditContext(
+    userId: string,
+    organizationId: string,
+    invoiceId: string,
+  ): Promise<{ context: CreditContext; display: InvoiceListDisplay } | null> {
+    const access = await this.access.authorize(userId, organizationId, 'pos.facturacion.void')
+    if (!access) return null
+    const context = await this.invoices.findCreditContext(access.organizationId, invoiceId)
+    if (!context) return null
+    return { context, display: displayOf(await this.loadSettings(access.organizationId)) }
+  }
+
+  /** Emite una nota de crédito sobre un documento emitido. Los montos los calcula el servidor, no el navegador. */
+  async issueCreditNote(userId: string, organizationId: string, input: IssueCreditNoteInput): Promise<CreditNoteResponse> {
+    const access = await this.access.authorize(userId, organizationId, 'pos.facturacion.void')
+    if (!access) return fail('No tienes permisos para emitir notas de crédito')
+    const orgId = access.organizationId
+
+    const parsed = IssueCreditNoteSchema.safeParse(input)
+    if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? 'Datos inválidos')
+    const data = parsed.data
+
+    const settings = await this.loadSettings(orgId)
+
+    // Reintento o doble clic: se devuelve la nota ya emitida en lugar de crear otra
+    const replay = await this.invoices.findCreditNoteByIdempotencyKey(orgId, data.idempotencyKey)
+    if (replay) return this.creditNoteIssued(replay, settings)
+
+    const command: IssueCreditNoteCommand = {
+      userId,
+      invoiceId: data.invoiceId,
+      idempotencyKey: data.idempotencyKey,
+      reason: data.reason,
+      lines: data.lines,
+      documentPrefixes: settings.documentPrefixes,
+      issuedAt: this.now(),
+    }
+
+    const outcome = await this.invoices.issueCreditNote(orgId, command)
+    switch (outcome.status) {
+      case 'issued':
+      case 'duplicate':
+        return this.creditNoteIssued(outcome.creditNote, settings)
+      case 'not_found':
+        return fail('El documento no existe')
+      case 'not_issued':
+        return fail(outcome.current === 'void' ? 'El documento está anulado' : 'Solo se pueden acreditar documentos emitidos')
+      case 'is_credit_note':
+        return fail('No se puede acreditar una nota de crédito')
+      case 'line_not_found':
+        return fail(at(outcome.index) + 'no pertenece al documento')
+      case 'invalid':
+        return fail(outcome.message)
+    }
+  }
+
   async voidInvoice(userId: string, organizationId: string, input: VoidInvoiceInput): Promise<IssueResponse> {
     const access = await this.access.authorize(userId, organizationId, 'pos.facturacion.void')
     if (!access) return fail('No tienes permisos para anular documentos')
@@ -382,12 +451,31 @@ export class InvoiceService {
         return fail(
           outcome.current === 'void' ? 'El documento ya está anulado' : 'Solo se pueden anular documentos emitidos',
         )
+      case 'is_credit_note':
+        return fail('Una nota de crédito emitida no se puede anular')
+      case 'has_credit_notes':
+        return fail('El documento tiene notas de crédito emitidas: no se puede anular')
       case 'voided':
         return {
           error: '',
           success: `Documento anulado: ${formatDocumentNumber(settings.documentPrefixes, outcome.invoice.documentType, outcome.invoice.number)}`,
         }
     }
+  }
+
+  private creditNoteIssued(note: IssuedCreditNote, settings: BillingSettings): CreditNoteResponse {
+    const label = formatDocumentNumber(settings.documentPrefixes, 'credit_note', note.number)
+    const money = (value: number) =>
+      formatMoney(value, { currency: note.currency, locale: settings.locale, decimals: note.currencyDecimals })
+    // Con opción A la nota reduce el saldo; si el documento ya estaba cobrado queda saldo a favor del cliente
+    // y la devolución del dinero se hace fuera del sistema.
+    const balance =
+      note.balance < 0
+        ? ` Saldo a favor del cliente: ${money(-note.balance)} (la devolución del dinero se hace fuera del sistema).`
+        : note.balance > 0
+          ? ` Saldo pendiente del documento: ${money(note.balance)}.`
+          : ' El documento queda sin saldo pendiente.'
+    return { error: '', success: `Nota de crédito emitida: ${label}.${balance}`, creditNote: note }
   }
 
   private async loadSettings(organizationId: string) {

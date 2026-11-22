@@ -20,3 +20,25 @@ describe('invoiceBadge', () => {
     expect(invoiceBadge(row({ paymentStatus: 'unpaid' }))).toEqual({ label: 'Pendiente', variant: 'outline' })
   })
 })
+
+describe('invoiceBadge · notas de crédito', () => {
+  it('una nota de crédito no se cobra: está emitida, sin importar su estado de cobro', () => {
+    for (const paymentStatus of ['unpaid', 'partial', 'paid'] as const) {
+      expect(invoiceBadge(row({ documentType: 'credit_note', paymentStatus, overdue: true }))).toEqual({ label: 'Emitida', variant: 'secondary' })
+    }
+  })
+  it('anulada gana a todo', () => {
+    expect(invoiceBadge(row({ documentType: 'credit_note', status: 'void' }))).toEqual({ label: 'Anulada', variant: 'destructive' })
+  })
+  it('un documento acreditado por completo se marca como acreditado', () => {
+    expect(invoiceBadge(row({ documentType: 'invoice', total: 2380, creditTotal: 2380, paymentStatus: 'paid' }))).toEqual({ label: 'Acreditada', variant: 'secondary' })
+    expect(invoiceBadge(row({ documentType: 'invoice', total: 2380, creditTotal: 2380, paymentStatus: 'unpaid' }))).toEqual({ label: 'Acreditada', variant: 'secondary' })
+  })
+  it('acreditado en parte conserva su estado de cobro', () => {
+    expect(invoiceBadge(row({ total: 2380, creditTotal: 1190, paymentStatus: 'partial' }))).toEqual({ label: 'Pago parcial', variant: 'outline' })
+    expect(invoiceBadge(row({ total: 2380, creditTotal: 0, paymentStatus: 'unpaid' }))).toEqual({ label: 'Pendiente', variant: 'outline' })
+  })
+  it('un documento sin total conocido sigue como antes', () => {
+    expect(invoiceBadge(row({ paymentStatus: 'paid' }))).toEqual({ label: 'Pagada', variant: 'secondary' })
+  })
+})

@@ -467,3 +467,99 @@ describe('NewInvoiceForm · emitir', () => {
     expect(issue).not.toHaveBeenCalled()
   })
 })
+
+describe('NewInvoiceForm · barra de acción', () => {
+  // jsdom no aplica CSS: aquí se prueba la estructura y las clases que producen el comportamiento
+  // (pegada abajo en celular, normal desde lg); el aspecto real se revisa en el navegador.
+  const bar = () => emit().parentElement!.parentElement as HTMLElement
+  const aside = () => screen.getByRole('complementary', { name: 'Datos del documento' })
+
+  it('hay un solo botón de emitir y cuelga directamente del aside, no de la tarjeta de totales', () => {
+    setup()
+    expect(screen.getAllByRole('button', { name: /Emitir/ })).toHaveLength(1)
+    expect(emit().type).toBe('submit')
+    expect(bar().parentElement).toBe(aside())
+    expect(bar().contains(summary().getByText('$0'))).toBe(false)
+  })
+
+  it('en celular el aside no genera caja y la barra se pega abajo; desde lg vuelve a ser la columna de siempre', () => {
+    setup()
+    expect(aside().classList.contains('contents')).toBe(true)
+    expect(aside().classList.contains('lg:sticky')).toBe(true)
+    for (const cls of ['sticky', 'bottom-0', 'lg:static', 'bg-background']) {
+      expect(bar().classList.contains(cls), cls).toBe(true)
+    }
+  })
+
+  it('respeta la zona segura inferior de los celulares con barra de gestos', () => {
+    setup()
+    expect(bar().className).toContain('env(safe-area-inset-bottom)')
+  })
+
+  it('con productos repite el total junto al botón, solo para verlo (no se anuncia dos veces)', async () => {
+    const user = setup()
+    await addProduct(user, 'Cola 1L')
+    const total = within(bar()).getByText('Total a emitir').parentElement as HTMLElement
+    expect(total.textContent).toBe('Total a emitir$1.190')
+    expect(total.getAttribute('aria-hidden')).toBe('true')
+    expect(total.classList.contains('lg:hidden')).toBe(true) // en escritorio ya está en el resumen
+    // el resumen sigue teniendo un único "Total", que es lo que leen los lectores de pantalla
+    expect(summary().getAllByText('Total')).toHaveLength(1)
+  })
+
+  it('el total de la barra sigue al documento', async () => {
+    const user = setup()
+    await addProduct(user, 'Cola 1L')
+    const qty = within(rows()[0]).getByLabelText('Cantidad')
+    await user.clear(qty)
+    await user.type(qty, '2')
+    expect(within(bar()).getByText('Total a emitir').parentElement?.textContent).toBe('Total a emitir$2.380')
+  })
+
+  it('sin productos, o con el documento inválido, la barra no muestra total y el botón sigue ocupando el ancho', async () => {
+    const user = setup()
+    expect(within(bar()).queryByText('Total a emitir')).toBeNull()
+    await addProduct(user, 'Cola 1L')
+    await user.clear(within(rows()[0]).getByLabelText('Cantidad'))
+    expect(within(bar()).queryByText('Total a emitir')).toBeNull()
+    expect(emit().classList.contains('flex-1')).toBe(true)
+  })
+
+  it('el error del servidor aparece dentro de la barra, junto al botón, y se limpia al reintentar', async () => {
+    issue.mockResolvedValueOnce({ error: 'Stock insuficiente: Cola 1L (disponible 1 un, pedido 2 un)', success: '' })
+    issue.mockResolvedValueOnce({ error: '', success: 'Documento emitido: F-000001' })
+    const user = setup()
+    await addProduct(user, 'Cola 1L')
+    await user.click(emit())
+
+    const alert = await screen.findByRole('alert')
+    expect(bar().contains(alert)).toBe(true)
+    expect(alert.textContent).toContain('Stock insuficiente')
+
+    await waitFor(() => expect(emit().disabled).toBe(false))
+    await user.click(emit())
+    await waitFor(() => expect(push).toHaveBeenCalled())
+    expect(screen.queryByText(/Stock insuficiente: Cola/)).toBeNull()
+  })
+
+  it('el aviso de stock sigue en la tarjeta de totales, no en la barra', async () => {
+    const user = setup()
+    await addProduct(user, 'Cola 1L')
+    const qty = within(rows()[0]).getByLabelText('Cantidad')
+    await user.clear(qty)
+    await user.type(qty, '9')
+    const status = screen.getByRole('status')
+    expect(status.textContent).toContain('más unidades de las disponibles')
+    expect(bar().contains(status)).toBe(false)
+  })
+
+  it('emitir con la barra funciona igual: mismo envío y misma clave', async () => {
+    issue.mockResolvedValue({ error: '', success: 'Documento emitido: F-000001' })
+    const user = setup()
+    await addProduct(user, 'Cola 1L')
+    await user.click(emit())
+    await waitFor(() => expect(issue).toHaveBeenCalledTimes(1))
+    expect(issue.mock.calls[0][0]).toMatchObject({ documentType: 'invoice', lines: [expect.objectContaining({ quantity: 1 })] })
+    expect(issue.mock.calls[0][0].idempotencyKey).toMatch(/^[0-9a-f-]{36}$/)
+  })
+})

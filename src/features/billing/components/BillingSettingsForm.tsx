@@ -20,12 +20,13 @@ import { Switch } from '@/shared/components/ui/switch'
 import { updateBillingSettingsAction } from '../action/billing-settings-action'
 import { BillingSettingsSchema, type BillingSettingsFormValues } from '../schemas/billingSettingsSchema'
 import {
+  ANY_DOCUMENT_TYPE_LABELS,
+  CREDIT_NOTE_TYPE,
   DOCUMENT_TYPES,
-  DOCUMENT_TYPE_LABELS,
+  type AnyDocumentType,
   type BillingSettings,
-  type DocumentType,
 } from '../types/billing'
-import { formatDocumentNumber } from '../utils/documentNumber'
+import { documentPrefix, formatDocumentNumber } from '../utils/documentNumber'
 import { currencyDefaultDecimals, formatMoney } from '../utils/formatMoney'
 import {
   CURRENCY_SUGGESTIONS,
@@ -195,6 +196,15 @@ function Preview({ currency, locale, decimals, taxName, taxRate, pricesIncludeTa
 export function BillingSettingsForm({ organizationId, settings }: Props) {
   const router = useRouter()
 
+  // Las empresas anteriores a las notas de crédito no traen su prefijo: se completa con el de fábrica
+  const initial = {
+    ...settings,
+    documentPrefixes: {
+      ...settings.documentPrefixes,
+      credit_note: documentPrefix(settings.documentPrefixes, CREDIT_NOTE_TYPE),
+    },
+  }
+
   const {
     register,
     handleSubmit,
@@ -203,7 +213,7 @@ export function BillingSettingsForm({ organizationId, settings }: Props) {
     formState: { errors, isSubmitting, isDirty },
   } = useForm<BillingSettingsFormValues>({
     resolver: zodResolver(BillingSettingsSchema),
-    defaultValues: settings,
+    defaultValues: initial,
   })
 
   const [currency, decimals, locale, taxName, taxRate, pricesIncludeTax, prefixes] = useWatch({
@@ -227,7 +237,7 @@ export function BillingSettingsForm({ organizationId, settings }: Props) {
           usualDecimals === 0 ? 'no usar decimales' : `${usualDecimals} decimales`
         }.`
 
-  const prefixHint = (type: DocumentType) => {
+  const prefixHint = (type: AnyDocumentType) => {
     const prefix = (prefixes?.[type] ?? '').trim().toUpperCase()
     return PREFIX_PATTERN.test(prefix)
       ? `Ejemplo: ${formatDocumentNumber({ [type]: prefix }, type, 1)}`
@@ -431,13 +441,13 @@ export function BillingSettingsForm({ organizationId, settings }: Props) {
         title="Numeración"
         description="Cada tipo de documento lleva su propia numeración correlativa, que empieza en 1."
       >
-        <div className="grid gap-4 sm:grid-cols-3">
-          {DOCUMENT_TYPES.map((type) => {
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[...DOCUMENT_TYPES, CREDIT_NOTE_TYPE].map((type) => {
             const id = `prefix-${type}`
             const error = errors.documentPrefixes?.[type]?.message
             const hint = prefixHint(type)
             return (
-              <Field key={type} id={id} label={DOCUMENT_TYPE_LABELS[type]} error={error} hint={hint}>
+              <Field key={type} id={id} label={ANY_DOCUMENT_TYPE_LABELS[type]} error={error} hint={hint}>
                 <Input
                   id={id}
                   autoComplete="off"

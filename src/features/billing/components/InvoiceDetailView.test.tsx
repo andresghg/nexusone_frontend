@@ -28,7 +28,7 @@ const detail = (over: Partial<InvoiceDetail> = {}): InvoiceDetail => ({
   dueDate: '2026-12-10', overdue: false, currency: 'CLP', currencyDecimals: 0, taxName: 'IVA', pricesIncludeTax: true,
   customer: { name: 'Ana Pérez', taxId: '12345678-5', email: 'ana@x.cl', address: 'Av. Siempre Viva 742' },
   issuer: { legalName: 'Acme SpA', taxId: '76.000.000-1', address: 'Calle 1' },
-  subtotal: 2000, discountTotal: 0, taxTotal: 380, total: 2380, paidTotal: 1000, balance: 1380, notes: null, voidReason: null, voidedAt: null,
+  subtotal: 2000, discountTotal: 0, taxTotal: 380, total: 2380, paidTotal: 1000, creditTotal: 0, balance: 1380, creditReason: null, relatedInvoice: null, creditNotes: [], notes: null, voidReason: null, voidedAt: null,
   items: [
     { position: 1, productId: 'p1', sku: 'COLA', description: 'Cola 1L', unit: 'un', quantity: 2, unitPrice: 1190, discountType: 'percent', discountValue: 0, taxRate: 19, lineGross: 2380, lineDiscount: 0, lineNet: 2000, lineTax: 380, lineTotal: 2380 },
   ],
@@ -368,5 +368,113 @@ describe('InvoiceDetailView · anular el documento', () => {
 
     await waitFor(() => expect(voidInvoice).toHaveBeenCalledWith({ organizationId: ORG, invoiceId: 'inv-1', reason: 'Documento duplicado' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+})
+
+describe('InvoiceDetailView · notas de crédito', () => {
+  const note = { id: 'note-1', number: 1, total: 1190, issuedAt: '2026-11-12T15:00:00.000Z' }
+  const creditNote = (over: Partial<InvoiceDetail> = {}) =>
+    detail({
+      id: 'note-1', documentType: 'credit_note', number: 1, paymentStatus: 'paid', dueDate: null, paidTotal: 0, creditTotal: 0, balance: 0,
+      subtotal: 1000, taxTotal: 190, total: 1190, creditReason: 'Devolución de productos',
+      relatedInvoice: { id: 'inv-1', documentType: 'invoice', number: 12 }, payments: [], ...over,
+    })
+
+  it('con permiso de anular ofrece "Crear nota de crédito", que lleva a su pantalla', () => {
+    setup({ detail: detail({ paymentStatus: 'unpaid', paidTotal: 0, balance: 2380 }) })
+    expect(screen.getByRole('link', { name: 'Crear nota de crédito' }).getAttribute('href')).toBe(`${LIST}/inv-1/nota-de-credito`)
+  })
+
+  it('sin permiso de anular no se ofrece', () => {
+    setup({ canVoid: false })
+    expect(screen.queryByRole('link', { name: 'Crear nota de crédito' })).toBeNull()
+  })
+
+  it('no se ofrece en un documento anulado ni en uno ya acreditado por completo', () => {
+    setup({ detail: detail({ status: 'void' }) })
+    expect(screen.queryByRole('link', { name: 'Crear nota de crédito' })).toBeNull()
+    cleanup()
+    setup({ detail: detail({ creditTotal: 2380, balance: -1000, creditNotes: [note] }) })
+    expect(screen.queryByRole('link', { name: 'Crear nota de crédito' })).toBeNull()
+  })
+
+  it('un documento con notas muestra lo acreditado, las lista con enlace y ya no se anula', () => {
+    setup({ detail: detail({ creditTotal: 1190, balance: 190, creditNotes: [note] }) })
+    const cobro = screen.getByText('Cobro').closest('section')!
+    expect(within(cobro).getByText('Acreditado').nextSibling?.textContent).toMatch(/−\$\s?1\.190/)
+    expect(within(cobro).getByText('Saldo').nextSibling?.textContent).toMatch(/\$\s?190/)
+
+    const list = screen.getByRole('list', { name: 'Notas de crédito del documento' })
+    const link = within(list).getByRole('link', { name: 'NC-000001' })
+    expect(link.getAttribute('href')).toBe(`${LIST}/note-1`)
+    expect(list.textContent).toMatch(/−\$\s?1\.190/)
+
+    expect(button('Anular documento')).toBeNull()
+    expect(screen.getByText(/ya no se puede anular/)).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Crear nota de crédito' })).toBeTruthy() // todavía queda por acreditar
+  })
+
+  it('sin notas no hay sección de notas ni aviso', () => {
+    setup()
+    expect(screen.queryByRole('list', { name: 'Notas de crédito del documento' })).toBeNull()
+    expect(screen.queryByText(/ya no se puede anular/)).toBeNull()
+  })
+
+  it('si el cliente ya había pagado, el saldo se muestra a favor del cliente', () => {
+    setup({ detail: detail({ paymentStatus: 'paid', paidTotal: 2380, creditTotal: 1190, balance: -1190, creditNotes: [note] }) })
+    const cobro = screen.getByText('Cobro').closest('section')!
+    expect(within(cobro).getByText('Saldo a favor del cliente').nextSibling?.textContent).toMatch(/\$\s?1\.190/)
+    expect(within(cobro).queryByText('Saldo')).toBeNull()
+    expect(screen.getByText('La devolución del dinero al cliente se registra fuera del sistema.')).toBeTruthy()
+    expect(button('Registrar cobro')).toBeNull() // no queda nada por cobrar
+  })
+
+  it('el cobro se ofrece sobre lo que queda por cobrar tras las notas', () => {
+    setup({ detail: detail({ paymentStatus: 'partial', paidTotal: 1000, creditTotal: 1190, balance: 190, creditNotes: [note] }) })
+    expect(button('Registrar cobro')).toBeTruthy()
+  })
+
+  describe('la nota de crédito misma', () => {
+    it('título, estado, enlace al documento que corrige y motivo', () => {
+      setup({ detail: creditNote() })
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Nota de crédito NC-000001')
+      expect(screen.getAllByText('Emitida').length).toBeGreaterThan(0)
+      const banner = screen.getByRole('status')
+      expect(banner.textContent).toContain('Esta nota corrige Factura F-000012')
+      expect(banner.textContent).toContain('Motivo: Devolución de productos')
+      expect(within(banner).getByRole('link', { name: 'Factura F-000012' }).getAttribute('href')).toBe(`${LIST}/inv-1`)
+      expect(screen.getByText('Documento corregido')).toBeTruthy()
+    })
+
+    it('no se cobra, ni se anula, ni se acredita: solo se imprime', () => {
+      setup({ detail: creditNote() })
+      expect(button('Imprimir')).toBeTruthy()
+      expect(button('Registrar cobro')).toBeNull()
+      expect(button('Anular documento')).toBeNull()
+      expect(screen.queryByRole('link', { name: 'Crear nota de crédito' })).toBeNull()
+      expect(screen.queryByText('Cobro')).toBeNull()
+      expect(screen.queryByRole('heading', { name: 'Cobros' })).toBeNull()
+      expect(screen.queryByText('Aún no hay cobros registrados.')).toBeNull()
+    })
+
+    it('aunque llegara con saldo, una nota nunca ofrece cobrar', () => {
+      setup({ detail: creditNote({ balance: 500 }) })
+      expect(button('Registrar cobro')).toBeNull()
+    })
+
+    it('muestra sus líneas y totales como cualquier documento', () => {
+      setup({ detail: creditNote() })
+      expect(screen.getAllByText('Cola 1L').length).toBeGreaterThan(0)
+      expect(screen.getAllByText(/\$\s?1\.190/).length).toBeGreaterThan(0)
+    })
+
+    it('imprime la nota con el documento que corrige', async () => {
+      const { user, print } = setup({ detail: creditNote() })
+      await user.click(button('Imprimir')!)
+      const html = print.mock.calls[0][0] as string
+      expect(html).toContain('<h1>Nota de crédito</h1>')
+      expect(html).toContain('Factura F-000012')
+      expect(html).toContain('Motivo: Devolución de productos')
+    })
   })
 })

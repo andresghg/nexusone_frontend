@@ -1,5 +1,5 @@
 import { formatQuantity, toMilli } from '@/features/inventory/utils/stockMath'
-import { DOCUMENT_TYPE_LABELS, PAYMENT_METHOD_LABELS } from '../types/billing'
+import { ANY_DOCUMENT_TYPE_LABELS, PAYMENT_METHOD_LABELS } from '../types/billing'
 import type { InvoiceDetail, InvoiceListDisplay } from '../types/invoice'
 import { formatCalendarDate, formatIssuedDate } from './formatDate'
 import { formatDocumentNumber } from './documentNumber'
@@ -48,9 +48,14 @@ export function buildInvoiceHtml(detail: InvoiceDetail, display: InvoiceListDisp
     escapeHtml(formatMoney(value, { currency: detail.currency, locale: display.locale, decimals: detail.currencyDecimals }))
   const e = escapeHtml
 
-  const typeLabel = DOCUMENT_TYPE_LABELS[detail.documentType]
+  const typeLabel = ANY_DOCUMENT_TYPE_LABELS[detail.documentType]
   const label = formatDocumentNumber(display.documentPrefixes, detail.documentType, detail.number)
   const isVoid = detail.status === 'void'
+  const isCreditNote = detail.documentType === 'credit_note'
+  const related = detail.relatedInvoice
+  const relatedLabel = related
+    ? `${ANY_DOCUMENT_TYPE_LABELS[related.documentType]} ${formatDocumentNumber(display.documentPrefixes, related.documentType, related.number)}`
+    : ''
   const activePayments = detail.payments.filter((payment) => payment.voidedAt === null)
 
   const lines = detail.items
@@ -120,10 +125,11 @@ export function buildInvoiceHtml(detail: InvoiceDetail, display: InvoiceListDisp
     <h1>${e(typeLabel)}</h1>
     <p class="number">${e(label)}</p>
     <div class="muted">Emitida el ${e(formatIssuedDate(detail.issuedAt, display))}</div>
-    ${detail.dueDate ? `<div class="muted">Vence el ${e(formatCalendarDate(detail.dueDate, display.locale))}</div>` : ''}
+    ${detail.dueDate && !isCreditNote ? `<div class="muted">Vence el ${e(formatCalendarDate(detail.dueDate, display.locale))}</div>` : ''}
   </div>
 </header>
 ${isVoid ? `<div class="void">DOCUMENTO ANULADO${detail.voidReason ? ` · ${e(detail.voidReason)}` : ''}</div>` : ''}
+${isCreditNote ? `<h2>Documento que corrige</h2><div>${e(relatedLabel)}${detail.creditReason ? `<br><span class="muted">Motivo: ${e(detail.creditReason)}</span>` : ''}</div>` : ''}
 <h2>Cliente</h2>
 <div>${customer}</div>
 <h2>Detalle</h2>
@@ -136,9 +142,9 @@ ${isVoid ? `<div class="void">DOCUMENTO ANULADO${detail.voidReason ? ` · ${e(de
   ${detail.discountTotal > 0 ? `<tr><td>Descuentos</td><td class="num">-${money(detail.discountTotal)}</td></tr>` : ''}
   ${taxRows}
   <tr class="grand"><td>Total</td><td class="num">${money(detail.total)}</td></tr>
-  ${!isVoid && activePayments.length > 0 ? `<tr><td>Pagado</td><td class="num">${money(detail.paidTotal)}</td></tr><tr><td>Saldo</td><td class="num">${money(detail.balance)}</td></tr>` : ''}
+  ${!isVoid && !isCreditNote && activePayments.length > 0 ? `<tr><td>Pagado</td><td class="num">${money(detail.paidTotal)}</td></tr><tr><td>Saldo</td><td class="num">${money(detail.balance)}</td></tr>` : ''}
 </table>
-${!isVoid && activePayments.length > 0 ? `<h2>Cobros</h2><table><tbody>${payments}</tbody></table>` : ''}
+${!isVoid && !isCreditNote && activePayments.length > 0 ? `<h2>Cobros</h2><table><tbody>${payments}</tbody></table>` : ''}
 ${detail.notes ? `<h2>Notas</h2><div>${e(detail.notes).replace(/\n/g, '<br>')}</div>` : ''}
 </body>
 </html>`

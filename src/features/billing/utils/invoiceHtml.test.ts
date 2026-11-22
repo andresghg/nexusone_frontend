@@ -10,7 +10,7 @@ const detail = (over: Partial<InvoiceDetail> = {}): InvoiceDetail => ({
   dueDate: '2026-12-10', overdue: false, currency: 'CLP', currencyDecimals: 0, taxName: 'IVA', pricesIncludeTax: true,
   customer: { name: 'Ana Pérez', taxId: '12345678-5', email: 'ana@x.cl', address: 'Av. Siempre Viva 742' },
   issuer: { legalName: 'Acme SpA', taxId: '76.000.000-1', address: 'Calle 1' },
-  subtotal: 2000, discountTotal: 0, taxTotal: 380, total: 2380, paidTotal: 1000, balance: 1380, notes: null, voidReason: null, voidedAt: null,
+  subtotal: 2000, discountTotal: 0, taxTotal: 380, total: 2380, paidTotal: 1000, creditTotal: 0, balance: 1380, creditReason: null, relatedInvoice: null, creditNotes: [], notes: null, voidReason: null, voidedAt: null,
   items: [
     { position: 1, productId: 'p1', sku: 'COLA', description: 'Cola 1L', unit: 'un', quantity: 2, unitPrice: 1190, discountType: 'percent', discountValue: 0, taxRate: 19, lineGross: 2380, lineDiscount: 0, lineNet: 2000, lineTax: 380, lineTotal: 2380 },
   ],
@@ -38,7 +38,7 @@ describe('buildInvoiceHtml', () => {
   })
 
   it('usa el prefijo de la empresa y el tipo de documento', () => {
-    const html = buildInvoiceHtml(detail({ documentType: 'sales_note', number: 3 }), { ...display, documentPrefixes: { invoice: 'F', receipt: 'R', sales_note: 'NOTA' } })
+    const html = buildInvoiceHtml(detail({ documentType: 'sales_note', number: 3 }), { ...display, documentPrefixes: { invoice: 'F', receipt: 'R', sales_note: 'NOTA', credit_note: 'NC' } })
     expect(html).toContain('<h1>Nota de venta</h1>')
     expect(html).toContain('NOTA-000003')
   })
@@ -140,5 +140,42 @@ describe('buildInvoiceHtml', () => {
   it('no carga nada externo', () => {
     const html = buildInvoiceHtml(detail(), display)
     expect(html).not.toMatch(/<script|<link|<img|src=|http:\/\/|https:\/\//)
+  })
+})
+
+describe('buildInvoiceHtml · nota de crédito', () => {
+  const note = (over: Partial<InvoiceDetail> = {}) =>
+    detail({
+      documentType: 'credit_note', number: 1, paymentStatus: 'paid', dueDate: null, paidTotal: 0, balance: 0, payments: [],
+      creditReason: 'Devolución <b>de</b> productos', relatedInvoice: { id: 'i0', documentType: 'invoice', number: 12 }, ...over,
+    })
+
+  it('titula la nota, la numera con NC y dice qué documento corrige y por qué', () => {
+    const html = buildInvoiceHtml(note(), display)
+    expect(html).toContain('<title>Nota de crédito NC-000001</title>')
+    expect(html).toContain('<h1>Nota de crédito</h1>')
+    expect(html).toContain('Documento que corrige')
+    expect(html).toContain('Factura F-000012')
+  })
+
+  it('el motivo se escapa (viene de la base)', () => {
+    const html = buildInvoiceHtml(note(), display)
+    expect(html).toContain('Motivo: Devolución &lt;b&gt;de&lt;/b&gt; productos')
+    expect(html).not.toContain('<b>de</b>')
+  })
+
+  it('no lleva vencimiento, ni pagado, ni saldo, ni cobros', () => {
+    const html = buildInvoiceHtml(note({ dueDate: '2026-12-10', paidTotal: 500, payments: detail().payments }), display)
+    expect(html).not.toContain('Vence el')
+    expect(html).not.toContain('Pagado')
+    expect(html).not.toContain('Saldo')
+    expect(html).not.toContain('<h2>Cobros</h2>')
+  })
+
+  it('un documento normal no cambia: sin bloque de documento que corrige y con sus cobros', () => {
+    const html = buildInvoiceHtml(detail(), display)
+    expect(html).not.toContain('Documento que corrige')
+    expect(html).toContain('<h2>Cobros</h2>')
+    expect(html).toContain('Vence el')
   })
 })

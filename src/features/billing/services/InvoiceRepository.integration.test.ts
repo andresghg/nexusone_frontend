@@ -7,7 +7,7 @@
 //
 // Limitación: PGlite tiene una sola conexión, así que serializa las transacciones; los bloqueos de
 // fila (FOR UPDATE) y las carreras reales entre conexiones no se pueden ejercitar aquí.
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -37,7 +37,7 @@ import { invoiceRepository } from './InvoiceRepository'
 import { InvoiceService } from './InvoiceService'
 
 const sqlFile = hasPglite
-  ? ['001_billing.sql', '002_payments.sql', '003_product_tax.sql'].map((name) => readFileSync(resolve(process.cwd(), 'db/sql', name), 'utf8')).join('\n')
+  ? readdirSync(resolve(process.cwd(), 'db/sql')).filter((n) => n.endsWith('.sql')).sort().map((name) => readFileSync(resolve(process.cwd(), 'db/sql', name), 'utf8')).join('\n')
   : ''
 const pg = () => holder.pg as Pg
 const q = async <T = Record<string, unknown>>(text: string, params: unknown[] = []) =>

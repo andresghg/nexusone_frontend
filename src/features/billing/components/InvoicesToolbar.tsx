@@ -1,7 +1,7 @@
 'use client'
 
 import { DataTableToolbar, type ToolbarControl } from '@/shared/components/data-table'
-import { DOCUMENT_TYPE_LABELS } from '../types/billing'
+import { ANY_DOCUMENT_TYPE_LABELS } from '../types/billing'
 import { INVOICES_QUERY_SPEC, toTableQuery, type InvoicesQuery } from '../utils/invoiceParams'
 
 type Props = { query: InvoicesQuery }
@@ -48,9 +48,10 @@ export function InvoicesToolbar({ query }: Props) {
       className: 'w-40',
       options: [
         { value: 'all', label: 'Todos los tipos' },
-        { value: 'invoice', label: DOCUMENT_TYPE_LABELS.invoice },
-        { value: 'receipt', label: DOCUMENT_TYPE_LABELS.receipt },
-        { value: 'sales_note', label: DOCUMENT_TYPE_LABELS.sales_note },
+        { value: 'invoice', label: ANY_DOCUMENT_TYPE_LABELS.invoice },
+        { value: 'receipt', label: ANY_DOCUMENT_TYPE_LABELS.receipt },
+        { value: 'sales_note', label: ANY_DOCUMENT_TYPE_LABELS.sales_note },
+        { value: 'credit_note', label: ANY_DOCUMENT_TYPE_LABELS.credit_note },
       ],
     },
     {

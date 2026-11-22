@@ -45,6 +45,36 @@ export const IssueInvoiceActionSchema = IssueInvoiceSchema.extend({
   organizationId: z.uuid({ error: 'Empresa inválida' }),
 })
 
+// Una nota de crédito: qué líneas del documento original, cuánto de cada una y si vuelven al stock.
+// Los montos no se aceptan del navegador: se calculan en el servidor con lo que quedaba por acreditar.
+export const CreditNoteLineSchema = z.object({
+  itemId: z.uuid({ error: 'Línea inválida' }),
+  quantity: z.number({ error: 'La cantidad debe ser un número' }),
+  restock: z.boolean(),
+})
+
+export const IssueCreditNoteSchema = z.object({
+  invoiceId: z.uuid({ error: 'Documento inválido' }),
+  reason: z
+    .string()
+    .trim()
+    .min(3, { error: 'Indica el motivo de la nota de crédito' })
+    .max(200, { error: 'El motivo admite máximo 200 caracteres' }),
+  // La genera el navegador al abrir la pantalla: un doble clic o un reintento no duplican la nota
+  idempotencyKey: z.uuid({ error: 'Clave de solicitud inválida' }),
+  lines: z
+    .array(CreditNoteLineSchema)
+    .min(1, { error: 'Elige al menos una línea para acreditar' })
+    .max(MAX_INVOICE_LINES, { error: `Máximo ${MAX_INVOICE_LINES} líneas por documento` })
+    .refine((lines) => new Set(lines.map((line) => line.itemId)).size === lines.length, {
+      error: 'Una línea no puede repetirse en la nota',
+    }),
+})
+
+export const IssueCreditNoteActionSchema = IssueCreditNoteSchema.extend({
+  organizationId: z.uuid({ error: 'Empresa inválida' }),
+})
+
 export const SearchProductsActionSchema = z.object({
   organizationId: z.uuid({ error: 'Empresa inválida' }),
   query: z.string().trim().max(100, { error: 'La búsqueda admite máximo 100 caracteres' }),
@@ -99,6 +129,8 @@ export type VoidInvoiceInput = z.infer<typeof VoidInvoiceSchema>
 export type VoidInvoiceActionInput = z.infer<typeof VoidInvoiceActionSchema>
 export type VoidReasonValues = z.infer<typeof VoidReasonSchema>
 export type IssueInvoiceActionInput = z.infer<typeof IssueInvoiceActionSchema>
+export type IssueCreditNoteInput = z.infer<typeof IssueCreditNoteSchema>
+export type IssueCreditNoteActionInput = z.infer<typeof IssueCreditNoteActionSchema>
 export type SearchProductsActionInput = z.infer<typeof SearchProductsActionSchema>
 export type AddPaymentInput = z.infer<typeof AddPaymentSchema>
 export type VoidPaymentInput = z.infer<typeof VoidPaymentSchema>

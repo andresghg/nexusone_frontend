@@ -1,4 +1,6 @@
+import type { CreditSourceLine } from '../utils/calculateCreditNote'
 import type {
+  AnyDocumentType,
   DiscountType,
   DocumentPrefixes,
   DocumentType,
@@ -124,6 +126,8 @@ export type VoidOutcome =
   | { status: 'voided'; invoice: { id: string; number: number; documentType: DocumentType } }
   | { status: 'not_found' }
   | { status: 'not_issued'; current: InvoiceStatus }
+  | { status: 'is_credit_note' } // una nota de crédito emitida no se anula
+  | { status: 'has_credit_notes' } // un documento con notas de crédito emitidas no se anula
 
 // ---------- Lista de documentos ----------
 
@@ -131,7 +135,7 @@ export type VoidOutcome =
 export type InvoiceStatusFilter = 'all' | 'issued' | 'void'
 // 'overdue' = emitido, con saldo pendiente y vencimiento ya pasado
 export type PaymentFilter = 'all' | PaymentStatus | 'overdue'
-export type DocumentTypeFilter = 'all' | DocumentType
+export type DocumentTypeFilter = 'all' | AnyDocumentType
 export type InvoicePeriod = 'all' | 'today' | 'week' | 'month' | 'last_month'
 
 export type InvoiceListFilters = {
@@ -153,14 +157,15 @@ export type InvoiceQueryFilters = Omit<InvoiceListFilters, 'period'> & {
 
 export type InvoiceListRow = {
   id: string
-  documentType: DocumentType
+  documentType: AnyDocumentType
   number: number
   status: InvoiceStatus // 'issued' | 'void': los borradores no se listan
   paymentStatus: PaymentStatus
   customerName: string | null
   customerTaxId: string | null
   total: number
-  paidTotal: number // lo cobrado hasta ahora; total − paidTotal es el saldo
+  paidTotal: number // lo cobrado hasta ahora
+  creditTotal: number // lo acreditado por notas de crédito emitidas; el saldo es total − creditTotal − paidTotal
   currency: string // los del documento al emitirse, no los de hoy
   currencyDecimals: number
   issuedAt: string // ISO
@@ -214,7 +219,7 @@ export type InvoicePayment = {
 
 export type InvoiceDetail = {
   id: string
-  documentType: DocumentType
+  documentType: AnyDocumentType
   number: number
   status: InvoiceStatus
   paymentStatus: PaymentStatus
@@ -233,7 +238,11 @@ export type InvoiceDetail = {
   taxTotal: number
   total: number
   paidTotal: number
-  balance: number // total − paidTotal
+  creditTotal: number // lo acreditado por notas de crédito emitidas
+  balance: number // total − creditTotal − paidTotal; negativo = saldo a favor del cliente; 0 en una nota de crédito
+  creditReason: string | null // solo en una nota de crédito
+  relatedInvoice: { id: string; documentType: DocumentType; number: number } | null // solo en una nota de crédito
+  creditNotes: { id: string; number: number; total: number; issuedAt: string }[] // notas emitidas sobre este documento
   notes: string | null
   voidReason: string | null
   voidedAt: string | null // ISO
@@ -266,6 +275,7 @@ export type PaymentOutcome =
   | { status: 'settled' } // ya no queda saldo
   | { status: 'exceeds_balance'; balance: number; currency: string; currencyDecimals: number }
   | { status: 'invalid_amount'; currencyDecimals: number } // más decimales de los que admite la moneda
+  | { status: 'credit_note' } // una nota de crédito no recibe cobros
 
 export type VoidPaymentCommand = {
   userId: string
@@ -279,3 +289,79 @@ export type VoidPaymentOutcome =
   | { status: 'not_found' }
   | { status: 'already_voided' }
   | { status: 'not_issued'; current: InvoiceStatus }
+
+// ---------- Notas de crédito ----------
+
+// Lo que pide quien emite la nota: qué línea del documento original, cuánto y si las unidades vuelven al stock.
+// Los montos NO vienen del navegador: los calcula calculateCreditNote con lo que quedaba por acreditar.
+export type CreditNoteLineRequest = { itemId: string; quantity: number; restock: boolean }
+
+export type IssueCreditNoteCommand = {
+  userId: string
+  invoiceId: string // el documento original
+  idempotencyKey: string
+  reason: string
+  lines: CreditNoteLineRequest[]
+  documentPrefixes: DocumentPrefixes // para escribir los números en el motivo del movimiento de stock
+  issuedAt: Date
+}
+
+export type IssuedCreditNote = {
+  id: string
+  number: number
+  total: number
+  relatedInvoiceId: string
+  relatedDocumentType: DocumentType
+  relatedNumber: number
+  currency: string
+  currencyDecimals: number
+  // Saldo del documento original DESPUÉS de la nota: total − acreditado − cobrado. Negativo = a favor del cliente.
+  balance: number
+}
+
+export type IssueCreditNoteOutcome =
+  | { status: 'issued'; creditNote: IssuedCreditNote }
+  | { status: 'duplicate'; creditNote: IssuedCreditNote } // la misma clave de idempotencia ya emitió esta nota
+  | { status: 'not_found' }
+  | { status: 'not_issued'; current: InvoiceStatus }
+  | { status: 'is_credit_note' } // no se acredita una nota de crédito
+  | { status: 'line_not_found'; index: number } // la línea no pertenece al documento original
+  | { status: 'invalid'; message: string } // cantidad fuera de lo que queda por acreditar, montos, etc.
+
+// Una línea del documento original con lo que ya se acreditó, para la pantalla "Crear nota de crédito".
+export type CreditableItem = {
+  itemId: string
+  position: number
+  productId: string | null
+  sku: string | null
+  description: string
+  unit: string
+  taxRate: number
+  tracksStock: boolean
+  quantity: number
+  creditedQuantity: number
+  remainingQuantity: number
+  lineTotal: number
+  creditedTotal: number
+  remainingTotal: number
+  // Montos de la línea original y de lo ya acreditado, desglosados: con ellos la pantalla calcula el total de la
+  // nota igual que el servidor (calculateCreditNote), sin aproximar.
+  source: CreditSourceLine
+}
+
+export type CreditContext = {
+  invoice: {
+    id: string
+    documentType: DocumentType
+    number: number
+    currency: string
+    currencyDecimals: number
+    taxName: string
+    pricesIncludeTax: boolean
+    total: number
+    creditTotal: number
+    paidTotal: number
+    balance: number // total − acreditado − cobrado; negativo = a favor del cliente
+  }
+  items: CreditableItem[]
+}

@@ -59,3 +59,12 @@ describe('hasActiveFilters', () => {
     expect(hasActiveFilters({ ...defaults, period: 'today' })).toBe(true)
   })
 })
+
+describe('parseInvoiceParams · nota de crédito', () => {
+  it('el filtro por tipo acepta nota de crédito', () => {
+    expect(parseInvoiceParams({ type: 'credit_note' }).type).toBe('credit_note')
+  })
+  it('y llega a los filtros del repositorio', () => {
+    expect(toFilters({ ...defaults, type: 'credit_note' })).toMatchObject({ documentType: 'credit_note' })
+  })
+})

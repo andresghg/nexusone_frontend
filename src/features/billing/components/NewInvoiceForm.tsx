@@ -37,6 +37,7 @@ import {
 } from '../utils/invoiceDraft'
 import { CustomerPicker } from './CustomerPicker'
 import { InvoiceLines } from './InvoiceLines'
+import { formatMoney } from '../utils/formatMoney'
 import { InvoiceSummary } from './InvoiceSummary'
 import { ProductPicker } from './ProductPicker'
 
@@ -150,8 +151,13 @@ export function NewInvoiceForm({ organizationId, settings, today, listHref, canA
         />
       </section>
 
-      <aside aria-label="Datos del documento" className="space-y-5 lg:sticky lg:top-4 lg:self-start">
-        <div className="space-y-4 rounded-lg border p-4">
+      {/*
+        En pantallas angostas el aside no genera caja (contents): sus tarjetas pasan a ser hijas directas del
+        formulario y así la barra de acción puede quedarse pegada abajo mientras el formulario esté a la vista.
+        Desde lg vuelve a ser la columna derecha de siempre.
+      */}
+      <aside aria-label="Datos del documento" className="contents lg:sticky lg:top-4 lg:flex lg:flex-col lg:self-start">
+        <div className="space-y-4 rounded-lg border p-4 lg:mb-5">
           <div className="space-y-1.5">
             <Label htmlFor="document-type">Tipo de documento</Label>
             <Select value={documentType} onValueChange={(value) => setDocumentType(value as DocumentType)}>
@@ -215,7 +221,7 @@ export function NewInvoiceForm({ organizationId, settings, today, listHref, canA
           )}
         </div>
 
-        <div className="space-y-4 rounded-lg border p-4">
+        <div className="space-y-4 rounded-lg border p-4 lg:rounded-b-none lg:border-b-0 lg:pb-0">
           <InvoiceSummary
             result={result}
             hasLines={lines.length > 0}
@@ -229,16 +235,33 @@ export function NewInvoiceForm({ organizationId, settings, today, listHref, canA
               Hay productos con más unidades de las disponibles. Si el stock cambió, el sistema lo comprobará al emitir.
             </p>
           )}
+        </div>
+
+        {/*
+          Barra de acción. En celular queda pegada abajo con el total a la vista, sin tener que bajar hasta el
+          final; el error del servidor va aquí, junto al botón, para verlo aunque la tarjeta de totales quede
+          fuera de pantalla. Desde lg se une visualmente a la tarjeta de totales, como antes.
+        */}
+        <div className="sticky bottom-0 z-10 -mx-4 space-y-2 border-t bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:-mx-6 md:px-6 lg:static lg:mx-0 lg:rounded-b-lg lg:border lg:border-t-0 lg:bg-transparent lg:p-4 lg:pt-4">
           {serverError && (
             <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
               {serverError}
             </p>
           )}
 
-          <Button type="submit" className="w-full" disabled={!canSubmit}>
-            {submitting && <Spinner />}
-            Emitir {DOCUMENT_TYPE_LABELS[documentType].toLowerCase()}
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* Repite el total de la tarjeta solo para verlo en celular; el resumen es lo que se anuncia a lectores de pantalla */}
+            {lines.length > 0 && result.ok && (
+              <p aria-hidden="true" className="shrink-0 lg:hidden">
+                <span className="block text-xs text-muted-foreground">Total a emitir</span>
+                <span className="text-lg font-semibold tabular-nums">{formatMoney(result.totals.total, format)}</span>
+              </p>
+            )}
+            <Button type="submit" className="min-w-0 flex-1 lg:w-full" disabled={!canSubmit}>
+              {submitting && <Spinner />}
+              Emitir {DOCUMENT_TYPE_LABELS[documentType].toLowerCase()}
+            </Button>
+          </div>
         </div>
       </aside>
 

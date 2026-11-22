@@ -114,7 +114,7 @@ describe('BillingSettingsService.update', () => {
     const result = await service.update(
       'u1',
       ORG_ID,
-      settings({ documentPrefixes: { invoice: 'F', receipt: 'F', sales_note: 'NV' } }),
+      settings({ documentPrefixes: { invoice: 'F', receipt: 'F', sales_note: 'NV', credit_note: 'NC' } }),
     )
     expect(result.error).toBe('Los prefijos de cada tipo de documento deben ser distintos')
     expect(repo.save).not.toHaveBeenCalled()

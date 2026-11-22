@@ -22,7 +22,7 @@ const BASE_PATH = '/dashboard/acme/pos/facturacion'
 
 const invoice = (over: Partial<InvoiceListRow> = {}): InvoiceListRow => ({
   id: 'inv-1', documentType: 'invoice', number: 12, status: 'issued', paymentStatus: 'unpaid',
-  customerName: 'Ana Pérez', customerTaxId: '12345678-5', total: 2380, paidTotal: 0, currency: 'CLP', currencyDecimals: 0,
+  customerName: 'Ana Pérez', customerTaxId: '12345678-5', total: 2380, paidTotal: 0, creditTotal: 0, currency: 'CLP', currencyDecimals: 0,
   issuedAt: '2026-11-10T15:00:00.000Z', dueDate: '2026-12-10', overdue: false, voidReason: null, ...over,
 })
 
@@ -73,7 +73,7 @@ describe('InvoicesTable · contenido', () => {
 
   it('usa los prefijos y la moneda con que se emitió el documento', () => {
     const custom: InvoiceListDisplay = {
-      ...display, locale: 'en-US', documentPrefixes: { invoice: 'FAC', receipt: 'R', sales_note: 'NV' },
+      ...display, locale: 'en-US', documentPrefixes: { invoice: 'FAC', receipt: 'R', sales_note: 'NV', credit_note: 'NC' },
     }
     setup([invoice({ currency: 'USD', currencyDecimals: 2, total: 2380 })], { display: custom })
     expect(screen.getByText('FAC-000012')).toBeTruthy()
@@ -207,5 +207,44 @@ describe('InvoicesTable · estados vacíos', () => {
     setup([], { query: { ...noFilters, payment: 'overdue' } })
     expect(screen.getByText('Sin resultados')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeTruthy()
+  })
+})
+
+describe('InvoicesTable · notas de crédito', () => {
+  const note = (over: Partial<InvoiceListRow> = {}) =>
+    invoice({ id: 'note-1', documentType: 'credit_note', number: 1, paymentStatus: 'paid', total: 1190, dueDate: null, ...over })
+
+  it('una nota se ve como nota: número NC, tipo, insignia "Emitida" y monto con signo menos', () => {
+    setup([note()])
+    const r = within(row(/NC-000001/))
+    expect(r.getByText('NC-000001')).toBeTruthy()
+    expect(r.getByText(/Nota de crédito · 10 nov\.? 2026/)).toBeTruthy()
+    expect(r.getAllByText('Emitida').length).toBeGreaterThan(0)
+    expect(r.getByText(/−\$\s?1\.190/)).toBeTruthy()
+    expect(r.queryByText(/Vence/)).toBeNull()
+    expect(within(row(/NC-000001/)).getByRole('link', { name: 'NC-000001' }).getAttribute('href')).toBe(`${BASE_PATH}/note-1`)
+  })
+
+  it('una nota nunca muestra vencimiento, aunque llegara con fecha', () => {
+    setup([note({ dueDate: '2026-12-10', paymentStatus: 'unpaid' })])
+    expect(within(row(/NC-000001/)).queryByText(/Vence/)).toBeNull()
+  })
+
+  it('una nota no ofrece anular, ni un documento que ya tiene notas', () => {
+    setup([note(), invoice({ id: 'inv-2', number: 13, creditTotal: 1190 })])
+    expect(screen.queryByRole('button', { name: 'Acciones de NC-000001' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Acciones de F-000013' })).toBeNull()
+  })
+
+  it('un documento con notas muestra cuánto se acreditó y un saldo que ya las descuenta', () => {
+    setup([invoice({ paymentStatus: 'partial', paidTotal: 1000, creditTotal: 1190 })])
+    const r = within(row(/F-000012/))
+    expect(r.getByText(/Acreditado\s+\$\s?1\.190/)).toBeTruthy()
+    expect(r.getAllByText(/Saldo\s+\$\s?190/).length).toBeGreaterThan(0) // 2.380 − 1.190 − 1.000
+  })
+
+  it('un documento acreditado por completo lo dice', () => {
+    setup([invoice({ paymentStatus: 'paid', creditTotal: 2380 })])
+    expect(within(row(/F-000012/)).getAllByText('Acreditada').length).toBeGreaterThan(0)
   })
 })

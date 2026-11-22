@@ -13,8 +13,11 @@ import {
 import { normalizeTaxId } from '@/features/customers/utils/taxId'
 import { fromMilli, toMilli } from '@/features/inventory/utils/stockMath'
 import {
+  ANY_DOCUMENT_TYPE_LABELS,
+  CREDIT_NOTE_TYPE,
   DOCUMENT_TYPES,
   DOCUMENT_TYPE_LABELS,
+  type AnyDocumentType,
   type DiscountType,
   type DocumentType,
   type InvoiceStatus,
@@ -23,10 +26,15 @@ import {
 } from '../types/billing'
 import type {
   AddPaymentCommand,
+  CreditableItem,
+  CreditContext,
   InvoiceDetail,
   InvoiceListRow,
   InvoiceQueryFilters,
   IssueCommand,
+  IssueCreditNoteCommand,
+  IssueCreditNoteOutcome,
+  IssuedCreditNote,
   IssuedInvoice,
   IssueOutcome,
   IssuerSnapshot,
@@ -38,8 +46,10 @@ import type {
   VoidPaymentCommand,
   VoidPaymentOutcome,
 } from '../types/invoice'
+import { calculateCreditNote, type CreditSourceLine } from '../utils/calculateCreditNote'
 import { toMoneyString } from '../utils/calculateInvoice'
-import { formatDocumentNumber } from '../utils/documentNumber'
+import { planRestock } from '../utils/creditNoteStock'
+import { documentPrefix, formatDocumentNumber } from '../utils/documentNumber'
 import { fromMinorUnits, toMinorUnits } from '../utils/minorUnits'
 import { paymentStatusFor } from '../utils/paymentStatus'
 import { parseNumberSearch } from '../utils/searchTerm'
@@ -78,6 +88,15 @@ export interface IInvoiceRepository {
   issue(organizationId: string, command: IssueCommand): Promise<IssueOutcome>
   /** Anula un documento emitido y devuelve el stock, en una sola transacción. */
   voidInvoice(organizationId: string, command: VoidCommand): Promise<VoidOutcome>
+  /** Las líneas de un documento emitido con lo ya acreditado. Undefined si no existe, no está emitido o es una nota. */
+  findCreditContext(organizationId: string, invoiceId: string): Promise<CreditContext | undefined>
+  findCreditNoteByIdempotencyKey(organizationId: string, key: string): Promise<IssuedCreditNote | undefined>
+  /**
+   * Emite una nota de crédito en UNA transacción: bloquea el documento original, calcula los montos con lo que
+   * quedaba por acreditar, toma el siguiente número NC, guarda nota y líneas, devuelve el stock elegido y
+   * recalcula el estado de cobro del original. La base vuelve a verificar los topes. Si algo falla no queda nada.
+   */
+  issueCreditNote(organizationId: string, command: IssueCreditNoteCommand): Promise<IssueCreditNoteOutcome>
 }
 
 class InvoiceRepository implements IInvoiceRepository {
@@ -206,7 +225,7 @@ class InvoiceRepository implements IInvoiceRepository {
     // Cobro: solo cuenta lo emitido (un documento anulado no está "pendiente de pago")
     const payment = filters.payment ?? 'all'
     if (payment !== 'all') {
-      conditions.push(eq(invoices.status, 'issued'))
+      conditions.push(eq(invoices.status, 'issued'), ne(invoices.documentType, 'credit_note')) // una nota no se cobra
       if (payment === 'overdue') {
         conditions.push(inArray(invoices.paymentStatus, ['unpaid', 'partial']), lt(invoices.dueDate, filters.today))
       } else {
@@ -235,8 +254,8 @@ class InvoiceRepository implements IInvoiceRepository {
         if (numberSearch.prefix === '') {
           matches.push(eq(invoices.number, numberSearch.number))
         } else {
-          const type = DOCUMENT_TYPES.find(
-            (candidate) => filters.documentPrefixes[candidate].toUpperCase() === numberSearch.prefix,
+          const type = ([...DOCUMENT_TYPES, CREDIT_NOTE_TYPE] as AnyDocumentType[]).find(
+            (candidate) => documentPrefix(filters.documentPrefixes, candidate).toUpperCase() === numberSearch.prefix,
           )
           if (type) matches.push(and(eq(invoices.documentType, type), eq(invoices.number, numberSearch.number))!)
         }
@@ -262,6 +281,7 @@ class InvoiceRepository implements IInvoiceRepository {
           customerTaxId: invoices.customerTaxId,
           total: invoices.total,
           paidTotal: invoices.paidTotal,
+          creditTotal: invoices.creditTotal,
           currency: invoices.currency,
           currencyDecimals: invoices.currencyDecimals,
           issuedAt: invoices.issuedAt,
@@ -280,7 +300,7 @@ class InvoiceRepository implements IInvoiceRepository {
       rows: rows.map(
         (row): InvoiceListRow => ({
           id: row.id,
-          documentType: row.documentType as DocumentType,
+          documentType: row.documentType as AnyDocumentType,
           number: row.number as number, // los documentos no borrador siempre tienen número (CHECK en la base)
           status: row.status as InvoiceStatus,
           paymentStatus: row.paymentStatus as PaymentStatus,
@@ -288,6 +308,7 @@ class InvoiceRepository implements IInvoiceRepository {
           customerTaxId: row.customerTaxId,
           total: Number(row.total),
           paidTotal: Number(row.paidTotal),
+          creditTotal: Number(row.creditTotal),
           currency: row.currency,
           currencyDecimals: row.currencyDecimals,
           issuedAt: (row.issuedAt as Date).toISOString(),
@@ -329,11 +350,40 @@ class InvoiceRepository implements IInvoiceRepository {
     const decimals = row.currencyDecimals
     const total = Number(row.total)
     const paidTotal = Number(row.paidTotal)
-    const balanceMinor = (toMinorUnits(total, decimals) ?? 0) - (toMinorUnits(paidTotal, decimals) ?? 0)
+    const creditTotal = Number(row.creditTotal)
+    const isCreditNote = row.documentType === 'credit_note'
+    // Saldo = total − acreditado − cobrado (negativo: a favor del cliente). Una nota de crédito no tiene saldo.
+    const balanceMinor = isCreditNote
+      ? 0
+      : (toMinorUnits(total, decimals) ?? 0) -
+        (toMinorUnits(creditTotal, decimals) ?? 0) -
+        (toMinorUnits(paidTotal, decimals) ?? 0)
+
+    const [related] =
+      isCreditNote && row.relatedInvoiceId
+        ? await db
+            .select({ id: invoices.id, documentType: invoices.documentType, number: invoices.number })
+            .from(invoices)
+            .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, row.relatedInvoiceId)))
+            .limit(1)
+        : []
+    const notes = isCreditNote
+      ? []
+      : await db
+          .select({ id: invoices.id, number: invoices.number, total: invoices.total, issuedAt: invoices.issuedAt })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.organizationId, organizationId),
+              eq(invoices.relatedInvoiceId, row.id),
+              eq(invoices.status, 'issued'),
+            ),
+          )
+          .orderBy(asc(invoices.number))
 
     return {
       id: row.id,
-      documentType: row.documentType as DocumentType,
+      documentType: row.documentType as AnyDocumentType,
       number: row.number,
       status: row.status as InvoiceStatus,
       paymentStatus: row.paymentStatus as PaymentStatus,
@@ -353,7 +403,18 @@ class InvoiceRepository implements IInvoiceRepository {
       taxTotal: Number(row.taxTotal),
       total,
       paidTotal,
+      creditTotal,
       balance: fromMinorUnits(balanceMinor, decimals),
+      creditReason: row.creditReason,
+      relatedInvoice: related
+        ? { id: related.id, documentType: related.documentType as DocumentType, number: related.number as number }
+        : null,
+      creditNotes: notes.map((note) => ({
+        id: note.id,
+        number: note.number as number,
+        total: Number(note.total),
+        issuedAt: (note.issuedAt as Date).toISOString(),
+      })),
       notes: row.notes,
       voidReason: row.voidReason,
       voidedAt: row.voidedAt?.toISOString() ?? null,
@@ -394,7 +455,9 @@ class InvoiceRepository implements IInvoiceRepository {
         .select({
           id: invoices.id,
           status: invoices.status,
+          documentType: invoices.documentType,
           total: invoices.total,
+          creditTotal: invoices.creditTotal,
           paidTotal: invoices.paidTotal,
           currency: invoices.currency,
           currencyDecimals: invoices.currencyDecimals,
@@ -404,12 +467,15 @@ class InvoiceRepository implements IInvoiceRepository {
         .for('update')
       if (!invoice) return { status: 'not_found' }
       if (invoice.status !== 'issued') return { status: 'not_issued', current: invoice.status as InvoiceStatus }
+      if (invoice.documentType === 'credit_note') return { status: 'credit_note' }
 
       const decimals = invoice.currencyDecimals
       const amountMinor = toMinorUnits(command.amount, decimals)
       if (amountMinor === null || amountMinor <= 0) return { status: 'invalid_amount', currencyDecimals: decimals }
 
-      const totalMinor = toMinorUnits(Number(invoice.total), decimals) ?? 0
+      // Lo que hay que cobrar es el total menos lo acreditado por notas de crédito
+      const totalMinor =
+        (toMinorUnits(Number(invoice.total), decimals) ?? 0) - (toMinorUnits(Number(invoice.creditTotal), decimals) ?? 0)
       const paidMinor = toMinorUnits(Number(invoice.paidTotal), decimals) ?? 0
       const balanceMinor = totalMinor - paidMinor
       if (balanceMinor <= 0) return { status: 'settled' }
@@ -466,7 +532,13 @@ class InvoiceRepository implements IInvoiceRepository {
       // Se bloquea el documento y recién entonces se vuelve a leer el pago: así dos anulaciones
       // simultáneas del mismo pago no lo descuentan dos veces
       const [invoice] = await tx
-        .select({ id: invoices.id, status: invoices.status, total: invoices.total, currencyDecimals: invoices.currencyDecimals })
+        .select({
+          id: invoices.id,
+          status: invoices.status,
+          total: invoices.total,
+          creditTotal: invoices.creditTotal,
+          currencyDecimals: invoices.currencyDecimals,
+        })
         .from(invoices)
         .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, found.invoiceId)))
         .for('update')
@@ -499,7 +571,8 @@ class InvoiceRepository implements IInvoiceRepository {
 
       const decimals = invoice.currencyDecimals
       const paidMinor = toMinorUnits(Number(remaining), decimals) ?? 0
-      const totalMinor = toMinorUnits(Number(invoice.total), decimals) ?? 0
+      const totalMinor =
+        (toMinorUnits(Number(invoice.total), decimals) ?? 0) - (toMinorUnits(Number(invoice.creditTotal), decimals) ?? 0)
       const paymentStatus = paymentStatusFor(paidMinor, totalMinor)
 
       await tx
@@ -730,6 +803,402 @@ class InvoiceRepository implements IInvoiceRepository {
     }
   }
 
+  // ---------- Notas de crédito ----------
+
+  /** Lo ya acreditado por línea: suma de las notas EMITIDAS que apuntan al documento. */
+  private async creditedByItem(tx: Tx | typeof db, organizationId: string, invoiceId: string) {
+    const rows = await tx
+      .select({
+        itemId: invoiceItems.relatedItemId,
+        quantity: sql<string>`coalesce(sum(${invoiceItems.quantity}), 0)`,
+        gross: sql<string>`coalesce(sum(${invoiceItems.lineGross}), 0)`,
+        discount: sql<string>`coalesce(sum(${invoiceItems.lineDiscount}), 0)`,
+        net: sql<string>`coalesce(sum(${invoiceItems.lineNet}), 0)`,
+        tax: sql<string>`coalesce(sum(${invoiceItems.lineTax}), 0)`,
+        total: sql<string>`coalesce(sum(${invoiceItems.lineTotal}), 0)`,
+      })
+      .from(invoiceItems)
+      .innerJoin(
+        invoices,
+        and(eq(invoices.organizationId, invoiceItems.organizationId), eq(invoices.id, invoiceItems.invoiceId)),
+      )
+      .where(
+        and(
+          eq(invoiceItems.organizationId, organizationId),
+          eq(invoices.relatedInvoiceId, invoiceId),
+          eq(invoices.status, 'issued'),
+        ),
+      )
+      .groupBy(invoiceItems.relatedItemId)
+    return new Map(
+      rows.flatMap((row) =>
+        row.itemId === null
+          ? []
+          : [
+              [
+                row.itemId,
+                {
+                  quantity: Number(row.quantity),
+                  gross: Number(row.gross),
+                  discount: Number(row.discount),
+                  net: Number(row.net),
+                  tax: Number(row.tax),
+                  total: Number(row.total),
+                },
+              ] as const,
+            ],
+      ),
+    )
+  }
+
+  async findCreditContext(organizationId: string, invoiceId: string): Promise<CreditContext | undefined> {
+    const [row] = await db
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, invoiceId)))
+      .limit(1)
+    if (!row || row.status !== 'issued' || row.number === null || row.documentType === 'credit_note') return undefined
+
+    const [items, credited] = await Promise.all([
+      db
+        .select()
+        .from(invoiceItems)
+        .where(and(eq(invoiceItems.organizationId, organizationId), eq(invoiceItems.invoiceId, row.id)))
+        .orderBy(asc(invoiceItems.position)),
+      this.creditedByItem(db, organizationId, row.id),
+    ])
+
+    const decimals = row.currencyDecimals
+    const minor = (value: number) => toMinorUnits(value, decimals) ?? 0
+    const balanceMinor = minor(Number(row.total)) - minor(Number(row.creditTotal)) - minor(Number(row.paidTotal))
+
+    return {
+      invoice: {
+        id: row.id,
+        documentType: row.documentType as DocumentType,
+        number: row.number,
+        currency: row.currency,
+        currencyDecimals: decimals,
+        taxName: row.taxName,
+        pricesIncludeTax: row.pricesIncludeTax,
+        total: Number(row.total),
+        creditTotal: Number(row.creditTotal),
+        paidTotal: Number(row.paidTotal),
+        balance: fromMinorUnits(balanceMinor, decimals),
+      },
+      items: items.map((item): CreditableItem => {
+        const done = credited.get(item.id)
+        const quantity = Number(item.quantity)
+        const creditedQuantity = done?.quantity ?? 0
+        const lineTotal = Number(item.lineTotal)
+        const creditedTotal = done?.total ?? 0
+        return {
+          itemId: item.id,
+          position: item.position,
+          productId: item.productId,
+          sku: item.sku,
+          description: item.description,
+          unit: item.unit,
+          taxRate: Number(item.taxRate),
+          tracksStock: item.tracksStock,
+          quantity,
+          creditedQuantity,
+          remainingQuantity: (toMilli(quantity) - toMilli(creditedQuantity)) / 1000,
+          lineTotal,
+          creditedTotal,
+          remainingTotal: fromMinorUnits(minor(lineTotal) - minor(creditedTotal), decimals),
+          source: {
+            quantity,
+            taxRate: Number(item.taxRate),
+            original: {
+              gross: Number(item.lineGross),
+              discount: Number(item.lineDiscount),
+              net: Number(item.lineNet),
+              tax: Number(item.lineTax),
+              total: lineTotal,
+            },
+            credited: done ?? { quantity: 0, gross: 0, discount: 0, net: 0, tax: 0, total: 0 },
+          },
+        }
+      }),
+    }
+  }
+
+  async findCreditNoteByIdempotencyKey(organizationId: string, key: string): Promise<IssuedCreditNote | undefined> {
+    const [row] = await db
+      .select({ id: invoices.id })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.organizationId, organizationId),
+          eq(invoices.idempotencyKey, key),
+          eq(invoices.documentType, 'credit_note'),
+          eq(invoices.status, 'issued'),
+        ),
+      )
+      .limit(1)
+    return row ? this.creditNoteSummary(db, organizationId, row.id) : undefined
+  }
+
+  private async creditNoteSummary(tx: Tx | typeof db, organizationId: string, noteId: string) {
+    const [note] = await tx
+      .select({
+        id: invoices.id,
+        number: invoices.number,
+        total: invoices.total,
+        relatedInvoiceId: invoices.relatedInvoiceId,
+        currency: invoices.currency,
+        currencyDecimals: invoices.currencyDecimals,
+      })
+      .from(invoices)
+      .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, noteId)))
+      .limit(1)
+    if (!note || note.number === null || note.relatedInvoiceId === null) return undefined
+    const [original] = await tx
+      .select({
+        documentType: invoices.documentType,
+        number: invoices.number,
+        total: invoices.total,
+        creditTotal: invoices.creditTotal,
+        paidTotal: invoices.paidTotal,
+      })
+      .from(invoices)
+      .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, note.relatedInvoiceId)))
+      .limit(1)
+    if (!original || original.number === null) return undefined
+
+    const decimals = note.currencyDecimals
+    const minor = (value: string) => toMinorUnits(Number(value), decimals) ?? 0
+    const balanceMinor = minor(original.total) - minor(original.creditTotal) - minor(original.paidTotal)
+    const summary: IssuedCreditNote = {
+      id: note.id,
+      number: note.number,
+      total: Number(note.total),
+      relatedInvoiceId: note.relatedInvoiceId,
+      relatedDocumentType: original.documentType as DocumentType,
+      relatedNumber: original.number,
+      currency: note.currency,
+      currencyDecimals: decimals,
+      balance: fromMinorUnits(balanceMinor, decimals),
+    }
+    return summary
+  }
+
+  async issueCreditNote(organizationId: string, command: IssueCreditNoteCommand): Promise<IssueCreditNoteOutcome> {
+    try {
+      return await db.transaction((tx) => this.issueCreditNoteInTransaction(tx, organizationId, command))
+    } catch (error) {
+      // Dos solicitudes simultáneas con la misma clave: gana una, la otra recibe la nota ya emitida
+      if (isUniqueViolation(error, 'idempotency')) {
+        const creditNote = await this.findCreditNoteByIdempotencyKey(organizationId, command.idempotencyKey)
+        if (creditNote) return { status: 'duplicate', creditNote }
+      }
+      throw error
+    }
+  }
+
+  private async issueCreditNoteInTransaction(
+    tx: Tx,
+    organizationId: string,
+    command: IssueCreditNoteCommand,
+  ): Promise<IssueCreditNoteOutcome> {
+    // 1) Bloquea el documento original: dos notas (o un cobro) sobre él se ejecutan una detrás de otra,
+    //    así cada una ve lo ya acreditado por la anterior. La base lo vuelve a verificar al emitir.
+    const [original] = await tx
+      .select()
+      .from(invoices)
+      .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, command.invoiceId)))
+      .for('update')
+    if (!original) return { status: 'not_found' }
+    if (original.status !== 'issued' || original.number === null) {
+      return { status: 'not_issued', current: original.status as InvoiceStatus }
+    }
+    if (original.documentType === 'credit_note') return { status: 'is_credit_note' }
+
+    // 2) Líneas originales + lo ya acreditado → montos de la nota (siempre los de la línea original)
+    const [items, credited] = await Promise.all([
+      tx
+        .select()
+        .from(invoiceItems)
+        .where(and(eq(invoiceItems.organizationId, organizationId), eq(invoiceItems.invoiceId, original.id))),
+      this.creditedByItem(tx, organizationId, original.id),
+    ])
+    const byId = new Map(items.map((item) => [item.id, item]))
+
+    const picked: { item: (typeof items)[number]; quantity: number; restock: boolean }[] = []
+    const seen = new Set<string>()
+    for (const [index, line] of command.lines.entries()) {
+      const item = byId.get(line.itemId)
+      if (!item) return { status: 'line_not_found', index }
+      if (seen.has(item.id)) return { status: 'invalid', message: `Línea ${index + 1}: ya está incluida en la nota` }
+      seen.add(item.id)
+      picked.push({ item, quantity: line.quantity, restock: line.restock })
+    }
+
+    const empty = { quantity: 0, gross: 0, discount: 0, net: 0, tax: 0, total: 0 }
+    const calc = calculateCreditNote(
+      picked.map(({ item, quantity }) => {
+        const source: CreditSourceLine = {
+          quantity: Number(item.quantity),
+          taxRate: Number(item.taxRate),
+          original: {
+            gross: Number(item.lineGross),
+            discount: Number(item.lineDiscount),
+            net: Number(item.lineNet),
+            tax: Number(item.lineTax),
+            total: Number(item.lineTotal),
+          },
+          credited: credited.get(item.id) ?? empty,
+        }
+        return { source, quantity }
+      }),
+      { currencyDecimals: original.currencyDecimals },
+    )
+    if (!calc.ok) return { status: 'invalid', message: calc.error }
+
+    // 3) Siguiente número NC. Va dentro de la transacción: si algo falla después, el número no se consume.
+    const [counter] = await tx
+      .insert(invoiceCounters)
+      .values({ organizationId, documentType: 'credit_note', lastNumber: 1 })
+      .onConflictDoUpdate({
+        target: [invoiceCounters.organizationId, invoiceCounters.documentType],
+        set: { lastNumber: sql`${invoiceCounters.lastNumber} + 1` },
+      })
+      .returning({ number: invoiceCounters.lastNumber })
+    const number = counter.number
+
+    // 4) Nota en borrador + líneas. Los datos del cliente y del emisor se copian del ORIGINAL (no de hoy).
+    //    Una nota no se cobra: queda "pagada" con 0 cobrado, así nunca aparece como cuenta por cobrar.
+    const { totals } = calc
+    const [created] = await tx
+      .insert(invoices)
+      .values({
+        organizationId,
+        documentType: 'credit_note',
+        status: 'draft',
+        paymentStatus: 'paid',
+        paidAt: null,
+        paidTotal: '0',
+        relatedInvoiceId: original.id,
+        creditReason: command.reason,
+        customerId: original.customerId,
+        customerName: original.customerName,
+        customerTaxId: original.customerTaxId,
+        customerEmail: original.customerEmail,
+        customerAddress: original.customerAddress,
+        issuerLegalName: original.issuerLegalName,
+        issuerTaxId: original.issuerTaxId,
+        issuerAddress: original.issuerAddress,
+        currency: original.currency,
+        currencyDecimals: original.currencyDecimals,
+        taxName: original.taxName,
+        pricesIncludeTax: original.pricesIncludeTax,
+        dueDate: null,
+        subtotal: toMoneyString(totals.subtotal),
+        discountTotal: toMoneyString(totals.discountTotal),
+        taxTotal: toMoneyString(totals.taxTotal),
+        total: toMoneyString(totals.total),
+        idempotencyKey: command.idempotencyKey,
+        createdBy: command.userId,
+      })
+      .returning({ id: invoices.id })
+
+    const restockOf = (restock: boolean, item: (typeof items)[number]) => restock && item.tracksStock && item.productId !== null
+    await tx.insert(invoiceItems).values(
+      picked.map(({ item, quantity, restock }, index) => ({
+        organizationId,
+        invoiceId: created.id,
+        position: index + 1,
+        productId: item.productId,
+        sku: item.sku,
+        description: item.description,
+        unit: item.unit,
+        quantity: fromMilli(toMilli(quantity)),
+        unitPrice: item.unitPrice,
+        discountType: item.discountType,
+        discountValue: item.discountValue,
+        taxRate: item.taxRate,
+        tracksStock: item.tracksStock,
+        relatedItemId: item.id,
+        restock: restockOf(restock, item),
+        lineGross: toMoneyString(calc.lines[index].gross),
+        lineDiscount: toMoneyString(calc.lines[index].discount),
+        lineNet: toMoneyString(calc.lines[index].net),
+        lineTax: toMoneyString(calc.lines[index].tax),
+        lineTotal: toMoneyString(calc.lines[index].total),
+      })),
+    )
+
+    // 5) Stock: un movimiento por producto con las unidades que vuelven al inventario
+    const restocks = planRestock(
+      picked.map(({ item, quantity, restock }) => ({
+        productId: item.productId,
+        quantity,
+        tracksStock: item.tracksStock,
+        restock,
+      })),
+    )
+    if (restocks.length > 0) {
+      const originalType = original.documentType as DocumentType
+      const label = `${ANY_DOCUMENT_TYPE_LABELS.credit_note} ${formatDocumentNumber(
+        command.documentPrefixes,
+        'credit_note',
+        number,
+      )} (${DOCUMENT_TYPE_LABELS[originalType]} ${formatDocumentNumber(command.documentPrefixes, originalType, original.number)})`
+      await tx.insert(stockMovements).values(
+        restocks.map((restock) => ({
+          organizationId,
+          productId: restock.productId,
+          type: 'credit_note',
+          delta: fromMilli(restock.milli),
+          reason: label,
+          referenceType: 'invoice',
+          referenceId: created.id,
+          createdBy: command.userId,
+        })),
+      )
+    }
+
+    // 6) Emitir: la base valida topes y suma lo acreditado al original (credit_total)
+    await tx
+      .update(invoices)
+      .set({
+        status: 'issued',
+        number,
+        issuedAt: command.issuedAt,
+        issuedBy: command.userId,
+        updatedAt: command.issuedAt,
+      })
+      .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, created.id)))
+
+    // 7) El estado de cobro del original se mide contra lo que queda por cobrar (total − acreditado)
+    const [after] = await tx
+      .select({
+        total: invoices.total,
+        creditTotal: invoices.creditTotal,
+        paidTotal: invoices.paidTotal,
+        paidAt: invoices.paidAt,
+      })
+      .from(invoices)
+      .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, original.id)))
+    const decimals = original.currencyDecimals
+    const netMinor = (toMinorUnits(Number(after.total), decimals) ?? 0) - (toMinorUnits(Number(after.creditTotal), decimals) ?? 0)
+    const paidMinor = toMinorUnits(Number(after.paidTotal), decimals) ?? 0
+    const paymentStatus = paymentStatusFor(paidMinor, netMinor)
+    await tx
+      .update(invoices)
+      .set({
+        paymentStatus,
+        paidAt: paymentStatus === 'paid' ? (after.paidAt ?? command.issuedAt) : null,
+        updatedAt: command.issuedAt,
+      })
+      .where(and(eq(invoices.organizationId, organizationId), eq(invoices.id, original.id)))
+
+    const creditNote = await this.creditNoteSummary(tx, organizationId, created.id)
+    if (!creditNote) throw new Error('No se pudo leer la nota de crédito emitida')
+    return { status: 'issued', creditNote }
+  }
+
   async voidInvoice(organizationId: string, command: VoidCommand): Promise<VoidOutcome> {
     return db.transaction(async (tx): Promise<VoidOutcome> => {
       // FOR UPDATE: dos anulaciones simultáneas se ejecutan una detrás de otra; la segunda ya lo ve anulado
@@ -747,6 +1216,20 @@ class InvoiceRepository implements IInvoiceRepository {
       if (invoice.status !== 'issued' || invoice.number === null) {
         return { status: 'not_issued', current: invoice.status as InvoiceStatus }
       }
+      // Reglas que la base también exige (aquí se detectan antes de tocar el stock, con un mensaje claro)
+      if (invoice.documentType === 'credit_note') return { status: 'is_credit_note' }
+      const [withNotes] = await tx
+        .select({ id: invoices.id })
+        .from(invoices)
+        .where(
+          and(
+            eq(invoices.organizationId, organizationId),
+            eq(invoices.relatedInvoiceId, invoice.id),
+            eq(invoices.status, 'issued'),
+          ),
+        )
+        .limit(1)
+      if (withNotes) return { status: 'has_credit_notes' }
 
       const documentType = invoice.documentType as DocumentType
 

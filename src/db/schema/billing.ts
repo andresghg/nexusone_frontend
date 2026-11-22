@@ -20,7 +20,7 @@ import { authUsers } from "drizzle-orm/supabase";
 import { organizations } from "./organization";
 import { products } from "./inventory";
 
-// Espejo de db/sql/001_billing.sql. Los CHECK y los triggers (documentos emitidos
+// Espejo de db/sql/001_billing.sql y 004_credit_notes.sql. Los CHECK y los triggers (documentos emitidos
 // inmutables) viven solo en el SQL: aquí van columnas, claves e índices.
 
 export const billingSettings = pgTable("billing_settings", {
@@ -119,6 +119,12 @@ export const invoices = pgTable(
     total: numeric("total", { precision: 14, scale: 2 }).notNull().default("0"),
     paidTotal: numeric("paid_total", { precision: 14, scale: 2 }).notNull().default("0"),
 
+    // Nota de crédito (004_credit_notes.sql): a qué documento corrige y por qué. En una nota (document_type
+    // 'credit_note') related_invoice_id es obligatorio. credit_total lo suma solo la base al emitir una nota.
+    relatedInvoiceId: uuid("related_invoice_id"),
+    creditReason: text("credit_reason"),
+    creditTotal: numeric("credit_total", { precision: 14, scale: 2 }).notNull().default("0"),
+
     notes: text("notes"),
     idempotencyKey: uuid("idempotency_key"),
 
@@ -137,6 +143,14 @@ export const invoices = pgTable(
       columns: [t.organizationId, t.customerId],
       foreignColumns: [customers.organizationId, customers.id],
     }),
+    foreignKey({
+      name: "invoices_related_invoice_fkey",
+      columns: [t.organizationId, t.relatedInvoiceId],
+      foreignColumns: [t.organizationId, t.id],
+    }),
+    index("invoices_related_invoice_idx")
+      .on(t.organizationId, t.relatedInvoiceId)
+      .where(sql`${t.relatedInvoiceId} is not null`),
     uniqueIndex("invoices_org_type_number_key")
       .on(t.organizationId, t.documentType, t.number)
       .where(sql`${t.number} is not null`),
@@ -168,6 +182,9 @@ export const invoiceItems = pgTable(
     discountValue: numeric("discount_value", { precision: 14, scale: 2 }).notNull().default("0"),
     taxRate: numeric("tax_rate", { precision: 5, scale: 2 }).notNull().default("0"),
     tracksStock: boolean("tracks_stock").notNull().default(false),
+    // Solo en líneas de una nota de crédito: la línea original que acredita y si las unidades vuelven al stock.
+    relatedItemId: uuid("related_item_id"),
+    restock: boolean("restock").notNull().default(false),
     lineGross: numeric("line_gross", { precision: 14, scale: 2 }).notNull(),
     lineDiscount: numeric("line_discount", { precision: 14, scale: 2 }).notNull(),
     lineNet: numeric("line_net", { precision: 14, scale: 2 }).notNull(),
@@ -187,6 +204,15 @@ export const invoiceItems = pgTable(
       foreignColumns: [products.organizationId, products.id],
     }),
     unique("invoice_items_position_key").on(t.organizationId, t.invoiceId, t.position),
+    unique("invoice_items_organization_id_id_key").on(t.organizationId, t.id),
+    foreignKey({
+      name: "invoice_items_related_item_fkey",
+      columns: [t.organizationId, t.relatedItemId],
+      foreignColumns: [t.organizationId, t.id],
+    }),
+    index("invoice_items_related_item_idx")
+      .on(t.organizationId, t.relatedItemId)
+      .where(sql`${t.relatedItemId} is not null`),
     index("invoice_items_product_idx")
       .on(t.organizationId, t.productId)
       .where(sql`${t.productId} is not null`),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BILLING_SETTINGS } from '../types/billing'
-import { formatDocumentNumber } from './documentNumber'
+import { documentPrefix, formatDocumentNumber } from './documentNumber'
 
 const prefixes = DEFAULT_BILLING_SETTINGS.documentPrefixes
 
@@ -29,5 +29,27 @@ describe('formatDocumentNumber', () => {
 
   it('el ancho es configurable', () => {
     expect(formatDocumentNumber(prefixes, 'invoice', 7, 3)).toBe('F-007')
+  })
+})
+
+describe('formatDocumentNumber · nota de crédito', () => {
+  it('usa NC si la empresa no configuró prefijo para notas de crédito', () => {
+    expect(formatDocumentNumber({ invoice: 'F' }, 'credit_note', 7)).toBe('NC-000007')
+  })
+  it('respeta el prefijo configurado', () => {
+    expect(formatDocumentNumber({ credit_note: 'CR' }, 'credit_note', 12)).toBe('CR-000012')
+  })
+  it('un borrador no tiene número', () => {
+    expect(formatDocumentNumber({}, 'credit_note', null)).toBe('Borrador')
+  })
+})
+
+describe('documentPrefix', () => {
+  it('el prefijo de la empresa o el de fábrica', () => {
+    expect(documentPrefix({ invoice: 'FAC' }, 'invoice')).toBe('FAC')
+    expect(documentPrefix({}, 'invoice')).toBe('F')
+    expect(documentPrefix({}, 'sales_note')).toBe('NV')
+    expect(documentPrefix({}, 'credit_note')).toBe('NC')
+    expect(documentPrefix({ credit_note: 'CR' }, 'credit_note')).toBe('CR')
   })
 })

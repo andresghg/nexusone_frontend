@@ -19,12 +19,12 @@ describe('BillingSettingsSchema', () => {
       ...valid(),
       currency: ' usd ',
       taxName: '  VAT ',
-      documentPrefixes: { invoice: ' fa ', receipt: 'rc', sales_note: 'nv' },
+      documentPrefixes: { invoice: ' fa ', receipt: 'rc', sales_note: 'nv', credit_note: ' cr ' },
     })
     expect(result.success && result.data).toMatchObject({
       currency: 'USD',
       taxName: 'VAT',
-      documentPrefixes: { invoice: 'FA', receipt: 'RC', sales_note: 'NV' },
+      documentPrefixes: { invoice: 'FA', receipt: 'RC', sales_note: 'NV', credit_note: 'CR' },
     })
   })
 
@@ -67,18 +67,33 @@ describe('BillingSettingsSchema', () => {
 
   it('prefijos: 1 a 5 letras o números, y distintos entre sí', () => {
     const withPrefixes = (documentPrefixes: object) => ({ ...valid(), documentPrefixes })
-    expect(firstError(withPrefixes({ invoice: '', receipt: 'R', sales_note: 'NV' }))).toBe(
+    expect(firstError(withPrefixes({ invoice: '', receipt: 'R', sales_note: 'NV', credit_note: 'NC' }))).toBe(
       'El prefijo usa de 1 a 5 letras o números',
     )
-    expect(firstError(withPrefixes({ invoice: 'ABCDEF', receipt: 'R', sales_note: 'NV' }))).toBe(
+    expect(firstError(withPrefixes({ invoice: 'ABCDEF', receipt: 'R', sales_note: 'NV', credit_note: 'NC' }))).toBe(
       'El prefijo usa de 1 a 5 letras o números',
     )
-    expect(firstError(withPrefixes({ invoice: 'F-1', receipt: 'R', sales_note: 'NV' }))).toBe(
+    expect(firstError(withPrefixes({ invoice: 'F-1', receipt: 'R', sales_note: 'NV', credit_note: 'NC' }))).toBe(
       'El prefijo usa de 1 a 5 letras o números',
     )
-    expect(firstError(withPrefixes({ invoice: 'F', receipt: 'f', sales_note: 'NV' }))).toBe(
+    expect(firstError(withPrefixes({ invoice: 'F', receipt: 'f', sales_note: 'NV', credit_note: 'NC' }))).toBe(
       'Los prefijos de cada tipo de documento deben ser distintos',
     )
+  })
+
+  it('la nota de crédito necesita su propio prefijo, distinto de los demás', () => {
+    const withPrefixes = (documentPrefixes: object) => ({ ...valid(), documentPrefixes })
+    // falta el prefijo
+    expect(BillingSettingsSchema.safeParse(withPrefixes({ invoice: 'F', receipt: 'R', sales_note: 'NV' })).success).toBe(false)
+    // igual al de otro tipo
+    expect(firstError(withPrefixes({ invoice: 'F', receipt: 'R', sales_note: 'NV', credit_note: 'f' }))).toBe(
+      'Los prefijos de cada tipo de documento deben ser distintos',
+    )
+    // mismo formato que los demás
+    expect(firstError(withPrefixes({ invoice: 'F', receipt: 'R', sales_note: 'NV', credit_note: 'N-C' }))).toBe(
+      'El prefijo usa de 1 a 5 letras o números',
+    )
+    expect(BillingSettingsSchema.safeParse(withPrefixes({ invoice: 'F', receipt: 'R', sales_note: 'NV', credit_note: 'NC' })).success).toBe(true)
   })
 
   it('los booleanos son obligatorios', () => {

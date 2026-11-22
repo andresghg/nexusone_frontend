@@ -10,7 +10,7 @@ import {
   type DataTableColumn,
   type RowAction,
 } from '@/shared/components/data-table'
-import { DOCUMENT_TYPE_LABELS } from '../types/billing'
+import { ANY_DOCUMENT_TYPE_LABELS } from '../types/billing'
 import type { InvoiceListDisplay, InvoiceListRow } from '../types/invoice'
 import { formatCalendarDate, formatIssuedDate } from '../utils/formatDate'
 import { formatDocumentNumber } from '../utils/documentNumber'
@@ -60,14 +60,16 @@ function StatusInfo({
           Saldo{' '}
           {formatMoney(
             fromMinorUnits(
-              (toMinorUnits(row.total, row.currencyDecimals) ?? 0) - (toMinorUnits(row.paidTotal, row.currencyDecimals) ?? 0),
+              (toMinorUnits(row.total, row.currencyDecimals) ?? 0) -
+                (toMinorUnits(row.creditTotal, row.currencyDecimals) ?? 0) -
+                (toMinorUnits(row.paidTotal, row.currencyDecimals) ?? 0),
               row.currencyDecimals,
             ),
             { currency: row.currency, locale: display.locale, decimals: row.currencyDecimals },
           )}
         </p>
       )}
-      {row.status === 'issued' && row.paymentStatus !== 'paid' && row.dueDate && (
+      {row.status === 'issued' && row.documentType !== 'credit_note' && row.paymentStatus !== 'paid' && row.dueDate && (
         <p className={row.overdue ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}>
           Vence {formatCalendarDate(row.dueDate, display.locale)}
         </p>
@@ -87,7 +89,7 @@ function buildColumns(display: InvoiceListDisplay, basePath: string): DataTableC
             {labelOf(row, display)}
           </Link>
           <p className="truncate text-xs text-muted-foreground">
-            {DOCUMENT_TYPE_LABELS[row.documentType]} · {formatIssuedDate(row.issuedAt, display)}
+            {ANY_DOCUMENT_TYPE_LABELS[row.documentType]} · {formatIssuedDate(row.issuedAt, display)}
           </p>
           {/* En pantallas angostas el cliente va aquí, porque su columna se oculta */}
           <p className="truncate text-xs text-muted-foreground md:hidden">{row.customerName ?? 'Sin cliente'}</p>
@@ -121,8 +123,16 @@ function buildColumns(display: InvoiceListDisplay, basePath: string): DataTableC
       cell: (row) => (
         <div className="flex flex-col items-end gap-1">
           <span className={row.status === 'void' ? 'tabular-nums line-through' : 'font-medium tabular-nums'}>
+            {/* Una nota de crédito resta: el signo evita confundirla con una venta */}
+            {row.documentType === 'credit_note' && '−'}
             {formatMoney(row.total, { currency: row.currency, locale: display.locale, decimals: row.currencyDecimals })}
           </span>
+          {row.documentType !== 'credit_note' && row.creditTotal > 0 && (
+            <span className="text-xs text-muted-foreground">
+              Acreditado{' '}
+              {formatMoney(row.creditTotal, { currency: row.currency, locale: display.locale, decimals: row.currencyDecimals })}
+            </span>
+          )}
           <div className="md:hidden">
             <StatusInfo row={row} display={display} showReason={false} align="end" />
           </div>
@@ -136,7 +146,8 @@ function buildColumns(display: InvoiceListDisplay, basePath: string): DataTableC
 export function InvoicesTable({ invoices, display, query, canCreate, canVoid, basePath, onVoid }: Props) {
   // Qué ve cada persona depende de sus permisos: solo se puede anular lo emitido
   const actionsFor = (invoice: InvoiceListRow): RowAction[] => {
-    if (!canVoid || invoice.status !== 'issued') return []
+    // Una nota de crédito y un documento que ya tiene notas no se anulan (la base también lo impide)
+    if (!canVoid || invoice.status !== 'issued' || invoice.documentType === 'credit_note' || invoice.creditTotal > 0) return []
     return [
       {
         id: 'void',

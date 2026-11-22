@@ -5,7 +5,7 @@ import {
   type QuerySpec,
   type TableQuery,
 } from '@/lib/table-query'
-import { DOCUMENT_TYPES } from '../types/billing'
+import { CREDIT_NOTE_TYPE, DOCUMENT_TYPES } from '../types/billing'
 import type {
   DocumentTypeFilter,
   InvoiceListFilters,
@@ -23,7 +23,7 @@ export const INVOICES_QUERY_SPEC = {
   q: { kind: 'text', max: 100 },
   status: { kind: 'enum', values: ['all', 'issued', 'void'], default: 'all' },
   payment: { kind: 'enum', values: ['all', 'unpaid', 'partial', 'paid', 'overdue'], default: 'all' },
-  type: { kind: 'enum', values: ['all', ...DOCUMENT_TYPES], default: 'all' },
+  type: { kind: 'enum', values: ['all', ...DOCUMENT_TYPES, CREDIT_NOTE_TYPE], default: 'all' },
   period: { kind: 'enum', values: INVOICE_PERIODS, default: 'all' },
 } as const satisfies QuerySpec
 

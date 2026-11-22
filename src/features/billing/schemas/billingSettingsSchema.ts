@@ -57,8 +57,10 @@ export const BillingSettingsSchema = z.object({
     .min(0, { error: 'Los días de plazo no pueden ser negativos' })
     .max(365, { error: 'Máximo 365 días' }),
   documentPrefixes: z
-    .object({ invoice: prefix, receipt: prefix, sales_note: prefix })
-    .refine((p) => new Set(Object.values(p)).size === DOCUMENT_TYPES.length, {
+    .object({ invoice: prefix, receipt: prefix, sales_note: prefix, credit_note: prefix })
+    // Cada tipo, notas de crédito incluidas, necesita un prefijo propio: si dos coinciden, dos documentos
+    // distintos podrían llamarse igual
+    .refine((p) => new Set(Object.values(p)).size === DOCUMENT_TYPES.length + 1, {
       error: 'Los prefijos de cada tipo de documento deben ser distintos',
     }),
 })

@@ -1,6 +1,19 @@
 export const DOCUMENT_TYPES = ['invoice', 'receipt', 'sales_note'] as const
 export type DocumentType = (typeof DOCUMENT_TYPES)[number]
 
+// Tipos que se emiten desde el formulario de facturación. La nota de crédito NO está aquí a propósito:
+// nace de un documento ya emitido (ver CREDIT_NOTE_TYPE) y el formulario de emisión no debe ofrecerla.
+export const CREDIT_NOTE_TYPE = 'credit_note' as const
+export const CREDIT_NOTE_DEFAULT_PREFIX = 'NC'
+export type AnyDocumentType = DocumentType | typeof CREDIT_NOTE_TYPE
+
+export const ANY_DOCUMENT_TYPE_LABELS: Record<AnyDocumentType, string> = {
+  invoice: 'Factura',
+  receipt: 'Recibo',
+  sales_note: 'Nota de venta',
+  credit_note: 'Nota de crédito',
+}
+
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
   invoice: 'Factura',
   receipt: 'Recibo',
@@ -34,7 +47,9 @@ export const MAX_AMOUNT = 999_999_999_999.99
 export const MAX_QUANTITY = 99_999_999
 export const MAX_INVOICE_LINES = 200
 
-export type DocumentPrefixes = Record<DocumentType, string>
+// Un prefijo por tipo de documento, la nota de crédito incluida. Las empresas anteriores a las notas lo reciben
+// de DEFAULT_BILLING_SETTINGS al leer su configuración.
+export type DocumentPrefixes = Record<AnyDocumentType, string>
 
 // Configuración de facturación de una empresa. Si no tiene fila, rige DEFAULT_BILLING_SETTINGS.
 export type BillingSettings = {
@@ -60,5 +75,5 @@ export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   pricesIncludeTax: true,
   allowNegativeStock: false,
   defaultDueDays: 0,
-  documentPrefixes: { invoice: 'F', receipt: 'R', sales_note: 'NV' },
+  documentPrefixes: { invoice: 'F', receipt: 'R', sales_note: 'NV', credit_note: CREDIT_NOTE_DEFAULT_PREFIX },
 }

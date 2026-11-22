@@ -148,6 +148,33 @@ describe('BillingSettingsForm · guardar', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
+  it('la nota de crédito tiene su propio prefijo (NC por defecto) con su ejemplo', async () => {
+    const user = setup()
+    expect(field('Nota de crédito').value).toBe('NC')
+    expect(screen.getByText('Ejemplo: NC-000001')).toBeTruthy()
+    await replace(user, 'Nota de crédito', 'cr')
+    expect(screen.getByText('Ejemplo: CR-000001')).toBeTruthy()
+  })
+
+  it('una empresa anterior a las notas de crédito (sin ese prefijo) lo recibe de fábrica y puede guardar', async () => {
+    save.mockResolvedValue({ error: '', success: 'Configuración guardada' })
+    const { credit_note: _omit, ...legacy } = DEFAULT_BILLING_SETTINGS.documentPrefixes
+    const user = setup({ ...structuredClone(DEFAULT_BILLING_SETTINGS), documentPrefixes: legacy as never })
+    expect(field('Nota de crédito').value).toBe('NC')
+    await replace(user, 'Plazo de pago por defecto (días)', '15')
+    await user.click(saveButton())
+    await waitFor(() => expect(save).toHaveBeenCalledTimes(1))
+    expect(save.mock.calls[0][0].documentPrefixes).toEqual({ invoice: 'F', receipt: 'R', sales_note: 'NV', credit_note: 'NC' })
+  })
+
+  it('el prefijo de la nota de crédito no puede repetir el de otro documento', async () => {
+    const user = setup()
+    await replace(user, 'Nota de crédito', 'F')
+    await user.click(saveButton())
+    expect(await screen.findByText('Los prefijos de cada tipo de documento deben ser distintos')).toBeTruthy()
+    expect(save).not.toHaveBeenCalled()
+  })
+
   it('envía la empresa y los valores normalizados con los tipos correctos', async () => {
     save.mockResolvedValue({ error: '', success: 'Configuración guardada' })
     const user = setup()

@@ -6,8 +6,11 @@ import type { Permission } from '@/types/navigation'
 import type { IssueInvoiceInput } from '../schemas/invoiceSchema'
 import { DEFAULT_BILLING_SETTINGS, type BillingSettings } from '../types/billing'
 import type {
+  CreditContext,
   InvoiceDetail,
   InvoiceListRow,
+  IssueCreditNoteOutcome,
+  IssuedCreditNote,
   PaymentOutcome,
   VoidPaymentOutcome,
   IssueCommand,
@@ -69,6 +72,9 @@ function setup({
   detail = undefined as InvoiceDetail | undefined,
   paymentOutcome = { status: 'not_found' } as PaymentOutcome,
   voidPaymentOutcome = { status: 'not_found' } as VoidPaymentOutcome,
+  creditContext = undefined as CreditContext | undefined,
+  creditOutcome = { status: 'not_found' } as IssueCreditNoteOutcome,
+  creditReplay = undefined as IssuedCreditNote | undefined,
   now = NOW,
 } = {}) {
   const invoices = {
@@ -82,6 +88,9 @@ function setup({
     voidPayment: vi.fn().mockResolvedValue(voidPaymentOutcome),
     issue: vi.fn().mockResolvedValue(outcome),
     voidInvoice: vi.fn().mockResolvedValue(voidOutcome),
+    findCreditContext: vi.fn().mockResolvedValue(creditContext),
+    findCreditNoteByIdempotencyKey: vi.fn().mockResolvedValue(creditReplay),
+    issueCreditNote: vi.fn().mockResolvedValue(creditOutcome),
   } satisfies IInvoiceRepository
 
   const settingsRepo = {
@@ -301,7 +310,7 @@ describe('InvoiceService.issue · resultado', () => {
   })
 
   it('el número usa los prefijos configurados por la empresa', async () => {
-    const settings = { ...DEFAULT_BILLING_SETTINGS, documentPrefixes: { invoice: 'FAC', receipt: 'R', sales_note: 'NV' } }
+    const settings = { ...DEFAULT_BILLING_SETTINGS, documentPrefixes: { invoice: 'FAC', receipt: 'R', sales_note: 'NV', credit_note: 'NC' } }
     const { service } = setup({ settings })
     expect((await service.issue('u1', ORG_ID, input())).success).toBe('Documento emitido: FAC-000012')
   })
@@ -387,6 +396,11 @@ describe('InvoiceService.voidInvoice', () => {
     const missing = setup({ voidOutcome: { status: 'not_found' } })
     expect((await missing.service.voidInvoice('u1', ORG_ID, request)).error).toBe('El documento no existe')
 
+    const credit = setup({ voidOutcome: { status: 'is_credit_note' } })
+    expect((await credit.service.voidInvoice('u1', ORG_ID, request)).error).toBe('Una nota de crédito emitida no se puede anular')
+    const withNotes = setup({ voidOutcome: { status: 'has_credit_notes' } })
+    expect((await withNotes.service.voidInvoice('u1', ORG_ID, request)).error).toBe('El documento tiene notas de crédito emitidas: no se puede anular')
+
     const voided = setup({ voidOutcome: { status: 'not_issued', current: 'void' } })
     expect((await voided.service.voidInvoice('u1', ORG_ID, request)).error).toBe('El documento ya está anulado')
 
@@ -399,7 +413,7 @@ describe('InvoiceService.list', () => {
   const READ: Permission[] = ['pos.facturacion.read']
   const row = (over: Partial<InvoiceListRow> = {}): InvoiceListRow => ({
     id: INVOICE_ID, documentType: 'invoice', number: 12, status: 'issued', paymentStatus: 'unpaid',
-    customerName: 'Ana Pérez', customerTaxId: '12345678-5', total: 2380, paidTotal: 0, currency: 'CLP', currencyDecimals: 0,
+    customerName: 'Ana Pérez', customerTaxId: '12345678-5', total: 2380, paidTotal: 0, creditTotal: 0, currency: 'CLP', currencyDecimals: 0,
     issuedAt: '2026-11-10T15:00:00.000Z', dueDate: null, overdue: false, voidReason: null, ...over,
   })
   const filtersOf = (invoices: ReturnType<typeof setup>['invoices']) => invoices.findPage.mock.calls[0][1]
@@ -422,7 +436,7 @@ describe('InvoiceService.list', () => {
   it('devuelve las filas y cómo mostrarlas según la configuración de la empresa', async () => {
     const settings: BillingSettings = {
       ...DEFAULT_BILLING_SETTINGS, locale: 'en-US', timezone: 'America/New_York',
-      documentPrefixes: { invoice: 'FAC', receipt: 'R', sales_note: 'NV' },
+      documentPrefixes: { invoice: 'FAC', receipt: 'R', sales_note: 'NV', credit_note: 'NC' },
     }
     const { invoices, service } = setup({ granted: READ, settings, page: { rows: [row()], total: 1 } })
     expect(await service.list('u1', ORG_ID)).toEqual({
@@ -656,7 +670,7 @@ const detailFixture: InvoiceDetail = {
   dueDate: '2026-12-10', overdue: false, currency: 'CLP', currencyDecimals: 0, taxName: 'IVA', pricesIncludeTax: true,
   customer: { name: 'Ana Pérez', taxId: '12345678-5', email: null, address: null },
   issuer: { legalName: 'Acme SpA', taxId: '76.000.000-1', address: 'Calle 1' },
-  subtotal: 2000, discountTotal: 0, taxTotal: 380, total: 2380, paidTotal: 1000, balance: 1380, notes: null, voidReason: null, voidedAt: null,
+  subtotal: 2000, discountTotal: 0, taxTotal: 380, total: 2380, paidTotal: 1000, creditTotal: 0, balance: 1380, creditReason: null, relatedInvoice: null, creditNotes: [], notes: null, voidReason: null, voidedAt: null,
   items: [], payments: [],
 }
 
@@ -679,7 +693,7 @@ describe('InvoiceService.getDetail', () => {
   })
 
   it('devuelve el documento y cómo mostrarlo; "hoy" es el de la zona horaria de la empresa', async () => {
-    const settings = { ...DEFAULT_BILLING_SETTINGS, locale: 'en-US', documentPrefixes: { invoice: 'FAC', receipt: 'R', sales_note: 'NV' } }
+    const settings = { ...DEFAULT_BILLING_SETTINGS, locale: 'en-US', documentPrefixes: { invoice: 'FAC', receipt: 'R', sales_note: 'NV', credit_note: 'NC' } }
     const { invoices, service } = setup({ detail: detailFixture, settings, now: new Date('2026-11-10T02:00:00Z') })
     const result = await service.getDetail('u1', ORG_ID, INVOICE_ID)
 
@@ -748,6 +762,7 @@ describe('InvoiceService.addPayment', () => {
     [{ status: 'not_issued', current: 'void' }, 'El documento está anulado'],
     [{ status: 'not_issued', current: 'draft' }, 'Solo se pueden cobrar documentos emitidos'],
     [{ status: 'settled' }, 'El documento ya está pagado'],
+    [{ status: 'credit_note' }, 'Una nota de crédito no recibe cobros'],
     [{ status: 'exceeds_balance', balance: 790, currency: 'CLP', currencyDecimals: 0 }, 'El monto supera el saldo pendiente ($790)'],
     [{ status: 'invalid_amount', currencyDecimals: 0 }, 'El monto debe ser un número entero'],
     [{ status: 'invalid_amount', currencyDecimals: 2 }, 'El monto admite máximo 2 decimales'],
@@ -787,5 +802,105 @@ describe('InvoiceService.voidPayment', () => {
   ] as [VoidPaymentOutcome, string][])('rechazo %j → "%s"', async (voidPaymentOutcome, message) => {
     const { service } = setup({ voidPaymentOutcome })
     expect(await service.voidPayment('u1', ORG_ID, request)).toEqual({ error: message, success: '' })
+  })
+})
+
+describe('InvoiceService.issueCreditNote', () => {
+  const ITEM_ID = '66666666-6666-4666-8666-666666666666'
+  const KEY = '77777777-7777-4777-8777-777777777777'
+  const request = { invoiceId: INVOICE_ID, reason: '  Devolución del cliente ', idempotencyKey: KEY, lines: [{ itemId: ITEM_ID, quantity: 1, restock: true }] }
+  const note = (over: Partial<IssuedCreditNote> = {}): IssuedCreditNote => ({
+    id: 'n1', number: 7, total: 1190, relatedInvoiceId: INVOICE_ID, relatedDocumentType: 'invoice', relatedNumber: 12,
+    currency: 'CLP', currencyDecimals: 0, balance: 1190, ...over,
+  })
+  const issued = (over: Partial<IssuedCreditNote> = {}) => ({ status: 'issued', creditNote: note(over) }) as IssueCreditNoteOutcome
+
+  it('solo quien puede anular: emitir no basta, y otra empresa no tiene acceso', async () => {
+    const { invoices, service } = setup({ granted: ['pos.facturacion.create'] })
+    expect(await service.issueCreditNote('u1', ORG_ID, request)).toEqual({ error: 'No tienes permisos para emitir notas de crédito', success: '' })
+    expect((await setup().service.issueCreditNote('u1', OTHER_ORG_ID, request)).error).toBe('No tienes permisos para emitir notas de crédito')
+    expect(invoices.issueCreditNote).not.toHaveBeenCalled()
+    expect(invoices.findCreditNoteByIdempotencyKey).not.toHaveBeenCalled()
+  })
+
+  it('valida la entrada antes de tocar la base', async () => {
+    const { invoices, service } = setup()
+    const bad = (over: object) => service.issueCreditNote('u1', ORG_ID, { ...request, ...over } as never)
+    expect((await bad({ reason: ' ab ' })).error).toBe('Indica el motivo de la nota de crédito')
+    expect((await bad({ reason: 'x'.repeat(201) })).error).toBe('El motivo admite máximo 200 caracteres')
+    expect((await bad({ invoiceId: 'x' })).error).toBe('Documento inválido')
+    expect((await bad({ idempotencyKey: 'x' })).error).toBe('Clave de solicitud inválida')
+    expect((await bad({ lines: [] })).error).toBe('Elige al menos una línea para acreditar')
+    expect((await bad({ lines: [{ itemId: 'x', quantity: 1, restock: true }] })).error).toBe('Línea inválida')
+    expect((await bad({ lines: [request.lines[0], request.lines[0]] })).error).toBe('Una línea no puede repetirse en la nota')
+    expect((await bad({ lines: [{ ...request.lines[0], quantity: '1' }] })).error).toBe('La cantidad debe ser un número')
+    expect(invoices.issueCreditNote).not.toHaveBeenCalled()
+  })
+
+  it('emite con el usuario, el motivo recortado, los prefijos y la hora actual; no manda montos', async () => {
+    const { invoices, service } = setup({ creditOutcome: issued() })
+    const result = await service.issueCreditNote('u1', ORG_ID, request)
+
+    expect(result.error).toBe('')
+    expect(result.creditNote?.number).toBe(7)
+    expect(invoices.issueCreditNote).toHaveBeenCalledWith(ORG_ID, {
+      userId: 'u1', invoiceId: INVOICE_ID, idempotencyKey: KEY, reason: 'Devolución del cliente',
+      lines: request.lines, documentPrefixes: DEFAULT_BILLING_SETTINGS.documentPrefixes, issuedAt: NOW,
+    })
+  })
+
+  it('informa el saldo: pendiente, sin saldo o a favor del cliente', async () => {
+    const pending = await setup({ creditOutcome: issued({ balance: 1190 }) }).service.issueCreditNote('u1', ORG_ID, request)
+    expect(pending.success).toMatch(/^Nota de crédito emitida: NC-000007\. Saldo pendiente del documento: .*1\.190\.$/)
+    const zero = await setup({ creditOutcome: issued({ balance: 0 }) }).service.issueCreditNote('u1', ORG_ID, request)
+    expect(zero.success).toBe('Nota de crédito emitida: NC-000007. El documento queda sin saldo pendiente.')
+    const favor = await setup({ creditOutcome: issued({ balance: -1190 }) }).service.issueCreditNote('u1', ORG_ID, request)
+    expect(favor.success).toMatch(/^Nota de crédito emitida: NC-000007\. Saldo a favor del cliente: .*1\.190.* \(la devolución del dinero se hace fuera del sistema\)\.$/)
+  })
+
+  it('un reintento con la misma clave devuelve la nota ya emitida sin volver a emitir', async () => {
+    const { invoices, service } = setup({ creditReplay: note({ number: 3 }) })
+    const result = await service.issueCreditNote('u1', ORG_ID, request)
+    expect(result.error).toBe('')
+    expect(result.success).toContain('NC-000003')
+    expect(invoices.findCreditNoteByIdempotencyKey).toHaveBeenCalledWith(ORG_ID, KEY)
+    expect(invoices.issueCreditNote).not.toHaveBeenCalled()
+  })
+
+  it('una carrera con la misma clave se trata como la nota ya emitida', async () => {
+    const result = await setup({ creditOutcome: { status: 'duplicate', creditNote: note({ number: 4 }) } }).service.issueCreditNote('u1', ORG_ID, request)
+    expect(result).toMatchObject({ error: '' })
+    expect(result.success).toContain('NC-000004')
+  })
+
+  it.each([
+    [{ status: 'not_found' }, 'El documento no existe'],
+    [{ status: 'not_issued', current: 'void' }, 'El documento está anulado'],
+    [{ status: 'not_issued', current: 'draft' }, 'Solo se pueden acreditar documentos emitidos'],
+    [{ status: 'is_credit_note' }, 'No se puede acreditar una nota de crédito'],
+    [{ status: 'line_not_found', index: 1 }, 'Línea 2: no pertenece al documento'],
+    [{ status: 'invalid', message: 'Línea 1: solo quedan 2 por acreditar' }, 'Línea 1: solo quedan 2 por acreditar'],
+  ] as [IssueCreditNoteOutcome, string][])('rechazo %j → "%s"', async (creditOutcome, message) => {
+    const { service } = setup({ creditOutcome })
+    expect(await service.issueCreditNote('u1', ORG_ID, request)).toEqual({ error: message, success: '' })
+  })
+})
+
+describe('InvoiceService.getCreditContext', () => {
+  const context = { invoice: { id: INVOICE_ID }, items: [] } as unknown as CreditContext
+
+  it('devuelve el contexto con cómo mostrarlo, solo a quien puede anular', async () => {
+    const { invoices, service } = setup({ creditContext: context })
+    const view = await service.getCreditContext('u1', ORG_ID, INVOICE_ID)
+    expect(view?.context).toBe(context)
+    expect(view?.display).toBeDefined()
+    expect(invoices.findCreditContext).toHaveBeenCalledWith(ORG_ID, INVOICE_ID)
+
+    expect(await setup({ creditContext: context, granted: ['pos.facturacion.read'] }).service.getCreditContext('u1', ORG_ID, INVOICE_ID)).toBeNull()
+    expect(await setup({ creditContext: context }).service.getCreditContext('u1', OTHER_ORG_ID, INVOICE_ID)).toBeNull()
+  })
+
+  it('un documento que no se puede acreditar (inexistente, sin emitir o nota) devuelve null', async () => {
+    expect(await setup({ creditContext: undefined }).service.getCreditContext('u1', ORG_ID, INVOICE_ID)).toBeNull()
   })
 })
