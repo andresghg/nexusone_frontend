@@ -35,6 +35,7 @@ function setup(granted: Permission[] = ['pos.inventario.read', 'pos.inventario.w
     create: vi.fn().mockResolvedValue({ id: 'p-1' }),
     update: vi.fn().mockResolvedValue(true),
     setActive: vi.fn().mockResolvedValue(true),
+    getLowStockCount: vi.fn().mockResolvedValue(0),
   } satisfies IProductRepository
 
   const access = {

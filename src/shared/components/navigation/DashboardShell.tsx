@@ -9,9 +9,11 @@ import { useSidebarState } from '@/hooks/use-sidebar-state'
 import { useTheme } from '@/hooks/use-theme'
 import { filterByPermissions, withBasePath } from '@/lib/navigation-utils'
 import { cn } from '@/lib/utils'
-import type { Permission } from '@/types/navigation'
 import type { OrganizationOption } from '@/shared/components/navigation/OrganizationSwitcher'
 import type { CurrentUser } from '@/shared/types/CurrentUser'
+import { usePathname } from 'next/navigation'
+import { isBranch, type Permission, type NavigationGroup, type NavigationItem } from '@/types/navigation'
+
 
 
 /**
@@ -41,29 +43,34 @@ interface DashboardShellProps {
 export function DashboardShell({ slug, organizations, canCreateOrganization, permissions, children, currentUser, lowStockCount }: DashboardShellProps) {
   const basePath = `/dashboard/${slug}`
   const { theme, toggleTheme } = useTheme()
+  const pathname = usePathname()
 
   const groups = useMemo(() => {
   const filtered = filterByPermissions(navigationConfig, permissions)
 
-  const withBadges = filtered.map((group) => ({
+  const withBadges: NavigationGroup[] = filtered.map((group) => ({
     ...group,
-    items: group.items.map((item) => ({
-      ...item,
-      children: item.children?.map((child) =>
-        child.id === 'pos-inventario'
-          ? {
-              ...child,
-              badge:
-                lowStockCount > 0
-                  ? {
-                      label: String(lowStockCount),
-                      variant: 'destructive' as const,
-                    }
-                  : undefined,
-            }
-          : child,
-      ),
-    })),
+    items: group.items.map((item): NavigationItem => {
+      if (!isBranch(item)) return item
+
+      return {
+        ...item,
+        children: item.children.map((child) =>
+          child.id === 'pos-inventario'
+            ? {
+                ...child,
+                badge:
+                  lowStockCount > 0
+                    ? {
+                        label: String(lowStockCount),
+                        variant: 'destructive' as const,
+                      }
+                    : undefined,
+              }
+            : child,
+        ),
+      }
+    }),
   }))
 
   return withBasePath(withBadges, basePath)
@@ -76,7 +83,7 @@ export function DashboardShell({ slug, organizations, canCreateOrganization, per
       <div className="min-h-screen bg-background">
         <AppSidebar
           groups={groups}
-          pathname={basePath}
+          pathname={pathname}
           collapsed={sidebar.collapsed}
           onToggleCollapsed={sidebar.toggleCollapsed}
           mobileOpen={sidebar.mobileOpen}
