@@ -18,7 +18,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/shared/components/ui/toggle-grou
 import { registerMovementAction } from '../action/stock-action'
 import { MovementFormSchema } from '../schemas/inventorySchema'
 import type { MovementType, ProductRow } from '../types/inventory'
-import { formatStock } from '../utils/format'
+import { formatStock, type DisplayFormat } from '../utils/format'
 import { previewMovement } from '../utils/stockRules'
 
 const TYPES: Record<
@@ -53,9 +53,10 @@ type Props = {
   onOpenChange: (open: boolean) => void
   organizationId: string
   product: ProductRow
+  display: DisplayFormat
 }
 
-export function MovementDialog({ open, onOpenChange, organizationId, product }: Props) {
+export function MovementDialog({ open, onOpenChange, organizationId, product, display }: Props) {
   const [pending, startTransition] = useTransition()
   const [type, setType] = useState<MovementType>('in')
   const [quantityText, setQuantityText] = useState('')
@@ -95,7 +96,7 @@ export function MovementDialog({ open, onOpenChange, organizationId, product }: 
         toast.error(result.error)
         return
       }
-      toast.success(`${result.success}. Stock: ${formatStock(result.stock ?? product.stock)} ${product.unit}`)
+      toast.success(`${result.success}. Stock: ${formatStock(result.stock ?? product.stock, display)} ${product.unit}`)
       onOpenChange(false)
     })
   }
@@ -182,17 +183,17 @@ export function MovementDialog({ open, onOpenChange, organizationId, product }: 
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Stock actual</span>
               <span className="tabular-nums">
-                {formatStock(product.stock)} {product.unit}
+                {formatStock(product.stock, display)} {product.unit}
               </span>
             </div>
             {preview.status === 'ok' && (
               <div className="flex items-center justify-between font-medium">
                 <span>Quedará en</span>
                 <span className="tabular-nums">
-                  {formatStock(preview.result)} {product.unit}{' '}
+                  {formatStock(preview.result, display)} {product.unit}{' '}
                   <span className="text-xs font-normal text-muted-foreground">
                     ({preview.delta > 0 ? '+' : ''}
-                    {formatStock(preview.delta)})
+                    {formatStock(preview.delta, display)})
                   </span>
                 </span>
               </div>

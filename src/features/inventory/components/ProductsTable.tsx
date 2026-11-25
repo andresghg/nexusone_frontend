@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import toast from 'react-hot-toast'
 import {
   Archive,
@@ -20,7 +21,7 @@ import {
 } from '@/shared/components/data-table'
 import { setProductActiveAction } from '../action/product-action'
 import type { ProductRow } from '../types/inventory'
-import { formatMoney, formatStock } from '../utils/format'
+import { formatPrice, formatStock, type DisplayFormat } from '../utils/format'
 import { hasActiveFilters, type InventoryQuery } from '../utils/inventoryParams'
 import { getStockStatus } from '../utils/stockStatus'
 
@@ -29,6 +30,7 @@ type Props = {
   products: ProductRow[]
   query: InventoryQuery
   canWrite: boolean
+  display: DisplayFormat // moneda, idioma y zona horaria de la empresa
   onCreate: () => void
   onEdit: (product: ProductRow) => void
   onMovement: (product: ProductRow) => void
@@ -50,7 +52,7 @@ function ProductCell({ product }: { product: ProductRow }) {
   )
 }
 
-function StockCell({ product }: { product: ProductRow }) {
+function StockCell({ product, display }: { product: ProductRow; display: DisplayFormat }) {
   const status = getStockStatus(product)
 
   if (status === 'untracked') {
@@ -66,13 +68,13 @@ function StockCell({ product }: { product: ProductRow }) {
         </Badge>
       )}
       <span className="tabular-nums">
-        {formatStock(product.stock)} <span className="text-xs text-muted-foreground">{product.unit}</span>
+        {formatStock(product.stock, display)} <span className="text-xs text-muted-foreground">{product.unit}</span>
       </span>
     </div>
   )
 }
 
-const COLUMNS: DataTableColumn<ProductRow>[] = [
+const buildColumns = (display: DisplayFormat): DataTableColumn<ProductRow>[] => [
   { id: 'product', header: 'Producto', cell: (product) => <ProductCell product={product} /> },
   {
     id: 'price',
@@ -80,9 +82,9 @@ const COLUMNS: DataTableColumn<ProductRow>[] = [
     align: 'right',
     hideBelow: 'md',
     className: 'tabular-nums',
-    cell: (product) => formatMoney(product.price),
+    cell: (product) => formatPrice(product.price, display),
   },
-  { id: 'stock', header: 'Stock', align: 'right', cell: (product) => <StockCell product={product} /> },
+  { id: 'stock', header: 'Stock', align: 'right', cell: (product) => <StockCell product={product} display={display} /> },
 ]
 
 /** La tabla de productos es solo configuración: columnas, acciones y mensajes. */
@@ -91,11 +93,14 @@ export function ProductsTable({
   products,
   query,
   canWrite,
+  display,
   onCreate,
   onEdit,
   onMovement,
   onHistory,
 }: Props) {
+  const columns = useMemo(() => buildColumns(display), [display])
+
   const setActive = async (product: ProductRow, active: boolean) => {
     try {
       const { error, success } = await setProductActiveAction({
@@ -167,7 +172,7 @@ export function ProductsTable({
   return (
     <DataTable
       caption="Productos"
-      columns={COLUMNS}
+      columns={columns}
       rows={products}
       getRowId={(product) => product.id}
       getRowLabel={(product) => product.name}

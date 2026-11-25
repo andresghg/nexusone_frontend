@@ -127,3 +127,43 @@ describe('BillingSettingsService.update', () => {
     expect(repo.save.mock.calls[0][0]).toBe(ORG_ID)
   })
 })
+
+describe('BillingSettingsService.getDisplayFormat', () => {
+  const usd = settings({ currency: 'USD', currencyDecimals: 2, locale: 'en-US', timezone: 'America/New_York', taxRate: 7, taxName: 'VAT' })
+
+  it('devuelve solo moneda, decimales, idioma y zona horaria: nada de impuestos ni numeración', async () => {
+    const { service } = setup(usd)
+    expect(await service.getDisplayFormat('u1', ORG_ID)).toEqual({
+      currency: 'USD', currencyDecimals: 2, locale: 'en-US', timezone: 'America/New_York',
+    })
+  })
+
+  it('quien solo puede leer inventario también lo recibe (con el formato REAL de la empresa, no el de fábrica)', async () => {
+    const { service } = setup(usd, ['pos.inventario.read'])
+    expect(await service.getDisplayFormat('u1', ORG_ID)).toMatchObject({ currency: 'USD', locale: 'en-US' })
+  })
+
+  it('quien solo puede leer facturación también', async () => {
+    const { service } = setup(usd, ['pos.facturacion.read'])
+    expect(await service.getDisplayFormat('u1', ORG_ID)).toMatchObject({ currency: 'USD' })
+  })
+
+  it('sin ninguno de los dos permisos devuelve null y no consulta la base', async () => {
+    const { repo, service } = setup(usd, ['pos.facturacion.configure', 'pos.inventario.write'])
+    expect(await service.getDisplayFormat('u1', ORG_ID)).toBeNull()
+    expect(repo.find).not.toHaveBeenCalled()
+  })
+
+  it('no sale de la empresa a la que pertenece', async () => {
+    const { repo, service } = setup(usd)
+    expect(await service.getDisplayFormat('u1', OTHER_ORG_ID)).toBeNull()
+    expect(repo.find).not.toHaveBeenCalled()
+  })
+
+  it('una empresa sin configuración usa el formato de fábrica', async () => {
+    const { service } = setup(null)
+    expect(await service.getDisplayFormat('u1', ORG_ID)).toEqual({
+      currency: 'CLP', currencyDecimals: 0, locale: 'es-CL', timezone: 'America/Santiago',
+    })
+  })
+})

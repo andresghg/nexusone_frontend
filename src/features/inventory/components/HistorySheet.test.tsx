@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, screen } from '@testing-library/react'
+import { DEFAULT_DISPLAY_FORMAT, type DisplayFormat } from '@/features/billing/types/billing'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { HistoryResult, MovementRow, ProductRow } from '../types/inventory'
 import { HistorySheet } from './HistorySheet'
@@ -15,9 +16,9 @@ const movement = (over: Partial<MovementRow> = {}): MovementRow => ({
 
 // `use()` suspende el componente: React exige renderizar dentro de `await act(...)` para poder
 // reintentar el dibujo cuando la promesa se resuelve.
-const renderSheet = (history: Promise<HistoryResult> | null) =>
+const renderSheet = (history: Promise<HistoryResult> | null, display: DisplayFormat = DEFAULT_DISPLAY_FORMAT) =>
   act(async () => {
-    render(<HistorySheet open onOpenChange={() => {}} product={product} history={history} />)
+    render(<HistorySheet open onOpenChange={() => {}} product={product} history={history} display={display} />)
   })
 
 afterEach(cleanup)
@@ -100,5 +101,25 @@ describe('HistorySheet', () => {
     await renderSheet(Promise.resolve({ error: '', items: [movement()] }))
     await screen.findByText('+10 un')
     expect(screen.queryByText(/Se muestran los últimos/)).toBeNull()
+  })
+})
+
+describe('HistorySheet · formato de la empresa', () => {
+  const usd: DisplayFormat = { currency: 'USD', currencyDecimals: 2, locale: 'en-US', timezone: 'America/New_York' }
+
+  it('cantidades y fechas siguen el idioma y la zona horaria de la empresa', async () => {
+    await renderSheet(
+      Promise.resolve({ error: '', items: [movement({ delta: -3.5, type: 'out', createdAt: '2026-11-01T15:00:00.000Z' })] }),
+      usd,
+    )
+    expect(await screen.findByText('-3.5 un')).toBeTruthy() // punto decimal, no coma
+    // 15:00 UTC = 10:00 en Nueva York (horario estándar desde el 1 de noviembre)
+    expect(screen.getByText(/Nov 1, 2026/)).toBeTruthy()
+    expect(screen.getByText(/10:00\s?AM/)).toBeTruthy()
+  })
+
+  it('la misma hora en Chile se muestra distinta', async () => {
+    await renderSheet(Promise.resolve({ error: '', items: [movement({ createdAt: '2026-11-01T15:00:00.000Z' })] }))
+    expect(await screen.findByText(/12:00\s?p\.\s?m\./)).toBeTruthy() // 15:00 UTC = 12:00 en Santiago (UTC-3)
   })
 })

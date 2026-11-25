@@ -1,4 +1,4 @@
-import { and, asc, count, eq, ilike, or, sql, type SQL } from 'drizzle-orm'
+import { and, asc, count, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm'
 import { db } from '@/db'
 import { productCategories, products, stockMovements } from '@/db/schema'
 import type { ProductRow, ProductStatus } from '../types/inventory'
@@ -29,6 +29,8 @@ export type ProductFilters = {
   lowStock?: boolean // solo productos que controlan stock con stock <= mínimo
 }
 
+export type BulkTaxOutcome = { status: 'updated'; count: number } | { status: 'changed'; count: number }
+
 export type Pagination = { page: number; pageSize: number }
 export type ProductPage = { rows: ProductRow[]; total: number }
 
@@ -42,6 +44,16 @@ export interface IProductRepository {
   update(organizationId: string, productId: string, data: ProductData): Promise<boolean>
   setActive(organizationId: string, productId: string, active: boolean): Promise<boolean>
   getLowStockCount(organizationId: string): Promise<number>
+  /**
+   * Cambia el impuesto propio de TODOS los productos que cumplen los filtros (los mismos de la lista), en una
+   * transacción. Solo lo aplica si hoy son exactamente `expectedCount`; si no, no toca nada y devuelve cuántos son.
+   */
+  setTaxRateByFilters(
+    organizationId: string,
+    filters: ProductFilters,
+    taxRate: string | null,
+    expectedCount: number,
+  ): Promise<BulkTaxOutcome>
 }
 
 // Escapa los comodines de LIKE para que "50%" busque literalmente "50%".
@@ -223,6 +235,42 @@ class ProductRepository implements IProductRepository {
       .where(and(eq(products.organizationId, organizationId), eq(products.id, productId)))
       .returning({ id: products.id })
     return rows.length > 0
+  }
+
+  async setTaxRateByFilters(
+    organizationId: string,
+    filters: ProductFilters,
+    taxRate: string | null,
+    expectedCount: number,
+  ): Promise<BulkTaxOutcome> {
+    return db.transaction(async (tx) => {
+      // Los mismos filtros que la lista (incluido stock bajo): lo que se ve es lo que se cambia. Las filas
+      // quedan bloqueadas para que nadie las modifique entre contarlas y actualizarlas.
+      const { stock, where } = this.base(organizationId, filters)
+      const rows = await tx
+        .with(stock)
+        .select({ id: products.id })
+        .from(products)
+        .leftJoin(stock, eq(stock.productId, products.id))
+        .where(where)
+        .for('update', { of: products })
+
+      if (rows.length !== expectedCount) return { status: 'changed', count: rows.length }
+
+      await tx
+        .update(products)
+        .set({ taxRate, updatedAt: new Date() })
+        .where(
+          and(
+            eq(products.organizationId, organizationId),
+            inArray(
+              products.id,
+              rows.map((row) => row.id),
+            ),
+          ),
+        )
+      return { status: 'updated', count: rows.length }
+    })
   }
 
   async getLowStockCount(organizationId: string): Promise<number> {

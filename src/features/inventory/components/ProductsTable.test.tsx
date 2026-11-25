@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import toast from 'react-hot-toast'
+import { DEFAULT_DISPLAY_FORMAT, type DisplayFormat } from '@/features/billing/types/billing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setProductActiveAction } from '../action/product-action'
 import type { ProductRow } from '../types/inventory'
@@ -29,11 +30,15 @@ const setActive = vi.mocked(setProductActiveAction)
 
 const setup = (
   products: ProductRow[],
-  { canWrite = true, query = noFilters }: { canWrite?: boolean; query?: InventoryQuery } = {},
+  {
+    canWrite = true,
+    query = noFilters,
+    display = DEFAULT_DISPLAY_FORMAT,
+  }: { canWrite?: boolean; query?: InventoryQuery; display?: DisplayFormat } = {},
 ) => {
   const handlers = { onCreate: vi.fn(), onEdit: vi.fn(), onMovement: vi.fn(), onHistory: vi.fn() }
   const user = userEvent.setup({ pointerEventsCheck: 0 })
-  render(<ProductsTable organizationId={ORG} products={products} query={query} canWrite={canWrite} {...handlers} />)
+  render(<ProductsTable organizationId={ORG} products={products} query={query} canWrite={canWrite} display={display} {...handlers} />)
   return { user, ...handlers }
 }
 
@@ -199,5 +204,41 @@ describe('ProductsTable · estados vacíos', () => {
     expect(screen.getByText('Sin resultados')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Limpiar filtros' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Nuevo producto' })).toBeNull()
+  })
+})
+
+describe('ProductsTable · formato de la empresa', () => {
+  const usd: DisplayFormat = { currency: 'USD', currencyDecimals: 2, locale: 'en-US', timezone: 'America/New_York' }
+  const eur: DisplayFormat = { currency: 'EUR', currencyDecimals: 2, locale: 'de-DE', timezone: 'Europe/Berlin' }
+  const cell = (name: string, text: RegExp | string) => within(screen.getByRole('row', { name: new RegExp(name) })).getAllByText(text)
+
+  it('el precio y el stock siguen la moneda y el idioma de la empresa', () => {
+    setup([product({ price: 1234.5, stock: 1234.5 })], { display: usd })
+    expect(cell('Cola 1L', '$1,234.50').length).toBeGreaterThan(0)
+    expect(cell('Cola 1L', /1,234\.5/).length).toBeGreaterThan(0)
+  })
+
+  it('otro idioma, otro separador', () => {
+    setup([product({ price: 1234.5, stock: 1234.5 })], { display: eur })
+    expect(cell('Cola 1L', /1\.234,50\s?€/).length).toBeGreaterThan(0)
+    expect(cell('Cola 1L', /1\.234,5/).length).toBeGreaterThan(0)
+  })
+
+  it('en pesos sin decimales no esconde los centavos de un precio', () => {
+    setup([product({ price: 1500.5 })])
+    expect(cell('Cola 1L', /\$\s?1\.500,50/).length).toBeGreaterThan(0)
+  })
+
+  it('al cambiar la configuración de la empresa la tabla se vuelve a dibujar con el formato nuevo', () => {
+    const { rerender } = render(
+      <ProductsTable organizationId={ORG} products={[product()]} query={noFilters} canWrite display={DEFAULT_DISPLAY_FORMAT}
+        onCreate={vi.fn()} onEdit={vi.fn()} onMovement={vi.fn()} onHistory={vi.fn()} />,
+    )
+    expect(cell('Cola 1L', /\$\s?1\.500/).length).toBeGreaterThan(0)
+    rerender(
+      <ProductsTable organizationId={ORG} products={[product()]} query={noFilters} canWrite display={usd}
+        onCreate={vi.fn()} onEdit={vi.fn()} onMovement={vi.fn()} onHistory={vi.fn()} />,
+    )
+    expect(cell('Cola 1L', '$1,500.00').length).toBeGreaterThan(0)
   })
 })

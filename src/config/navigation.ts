@@ -133,8 +133,7 @@ export const navigationConfig: NavigationGroup[] = [
         label: 'Reportes',
         icon: BarChart3,
         href: `${DASHBOARD}/finanzas/reportes`,
-        status: 'soon',
-        badge: { label: 'Pronto', variant: 'outline' },
+        description: 'Ventas, productos y cuentas por cobrar',
         permissions: ['finanzas.reportes.read'],
       },
       {

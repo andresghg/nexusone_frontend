@@ -120,10 +120,34 @@ export const ProductHistorySchema = z.object({
   productId: z.uuid({ error: 'Producto inválido' }),
 })
 
+// Cambio de impuesto en lote: se aplica a TODOS los productos de la lista que la persona está viendo (mismos
+// filtros que la lista). `expectedCount` es el total que ella vio y confirmó: si al aplicar la lista tiene otro
+// total (alguien creó, archivó o cambió productos), no se toca nada. Máximo 5.000 productos por vez.
+export const BULK_TAX_MAX_PRODUCTS = 5000
+
+export const BulkTaxRateSchema = z.object({
+  organizationId,
+  filters: z.object({
+    search: z.string().trim().max(100).optional(),
+    categoryId: z.uuid({ error: 'Categoría inválida' }).optional(),
+    status: z.enum(['active', 'archived', 'all']),
+    lowStock: z.boolean().optional(),
+  }),
+  taxRate,
+  expectedCount: z
+    .number({ error: 'La cantidad de productos es inválida' })
+    .int({ error: 'La cantidad de productos es inválida' })
+    .min(1, { error: 'No hay productos para actualizar' })
+    .max(BULK_TAX_MAX_PRODUCTS, {
+      error: `Son demasiados productos: filtra la lista a ${BULK_TAX_MAX_PRODUCTS.toLocaleString('es-CL')} o menos`,
+    }),
+})
+
 export type ProductInput = z.infer<typeof ProductSchema>
 export type ProductFormValues = z.infer<typeof ProductFormSchema>
 export type CreateProductInput = z.infer<typeof CreateProductSchema>
 export type UpdateProductInput = z.infer<typeof UpdateProductSchema>
+export type BulkTaxRateInput = z.infer<typeof BulkTaxRateSchema>
 export type SetProductActiveInput = z.infer<typeof SetProductActiveSchema>
 export type CreateCategoryInput = z.infer<typeof CreateCategorySchema>
 export type RenameCategoryInput = z.infer<typeof RenameCategorySchema>

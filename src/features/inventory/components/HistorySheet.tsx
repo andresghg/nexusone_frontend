@@ -17,7 +17,7 @@ import {
   type HistoryResult,
   type ProductRow,
 } from '../types/inventory'
-import { formatDateTime, formatStock } from '../utils/format'
+import { formatDateTime, formatStock, type DisplayFormat } from '../utils/format'
 
 const TYPE_LABEL: Record<HistoryMovementType, string> = {
   in: 'Entrada',
@@ -27,7 +27,15 @@ const TYPE_LABEL: Record<HistoryMovementType, string> = {
   sale_void: 'Anulación',
 }
 
-function HistoryList({ history, unit }: { history: Promise<HistoryResult>; unit: string }) {
+function HistoryList({
+  history,
+  unit,
+  display,
+}: {
+  history: Promise<HistoryResult>
+  unit: string
+  display: DisplayFormat
+}) {
   // `use` espera la promesa mientras <Suspense> muestra el esqueleto
   const { error, items } = use(history)
 
@@ -59,12 +67,12 @@ function HistoryList({ history, unit }: { history: Promise<HistoryResult>; unit:
                 )}
               >
                 {movement.delta > 0 ? '+' : ''}
-                {formatStock(movement.delta)} {unit}
+                {formatStock(movement.delta, display)} {unit}
               </span>
             </div>
             {movement.reason && <p className="text-sm">{movement.reason}</p>}
             <p className="text-xs text-muted-foreground">
-              {movement.userName ?? 'Usuario desconocido'} · {formatDateTime(movement.createdAt)}
+              {movement.userName ?? 'Usuario desconocido'} · {formatDateTime(movement.createdAt, display)}
             </p>
           </li>
         ))}
@@ -91,9 +99,10 @@ type Props = {
   onOpenChange: (open: boolean) => void
   product: ProductRow | null
   history: Promise<HistoryResult> | null
+  display: DisplayFormat
 }
 
-export function HistorySheet({ open, onOpenChange, product, history }: Props) {
+export function HistorySheet({ open, onOpenChange, product, history, display }: Props) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-md">
@@ -105,7 +114,7 @@ export function HistorySheet({ open, onOpenChange, product, history }: Props) {
         <div className="px-4 pb-4">
           {history && (
             <Suspense fallback={<HistorySkeleton />}>
-              <HistoryList history={history} unit={product?.unit ?? ''} />
+              <HistoryList history={history} unit={product?.unit ?? ''} display={display} />
             </Suspense>
           )}
         </div>

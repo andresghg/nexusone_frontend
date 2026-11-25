@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation'
+import { billingSettingsService } from '@/features/billing/services/BillingSettingsService'
+import { DEFAULT_DISPLAY_FORMAT } from '@/features/billing/types/billing'
 import { InventoryView } from '@/features/inventory/components/InventoryView'
 import { categoryService } from '@/features/inventory/services/CategoryService'
 import { productService } from '@/features/inventory/services/ProductService'
@@ -26,12 +28,14 @@ export default async function InventoryPage({ params, searchParams }: Props) {
   const { user, organization, permissions } = await getCurrentAccess(slug)
   const query = parseInventoryParams(await searchParams)
 
-  const [{ rows, total }, categories] = await Promise.all([
+  const [{ rows, total }, categories, display] = await Promise.all([
     productService.list(user.id, organization.id, toFilters(query), {
       page: query.page,
       pageSize: PAGE_SIZE,
     }),
     categoryService.list(user.id, organization.id),
+    // Moneda, idioma y zona horaria de la empresa: los mismos con que se factura
+    billingSettingsService.getDisplayFormat(user.id, organization.id),
   ])
 
   // Una página fuera de rango (p. ej. tras archivar el último producto de la última página)
@@ -49,6 +53,7 @@ export default async function InventoryPage({ params, searchParams }: Props) {
       query={query}
       pageSize={PAGE_SIZE}
       canWrite={permissions.includes('pos.inventario.write')}
+      display={display ?? DEFAULT_DISPLAY_FORMAT}
     />
   )
 }

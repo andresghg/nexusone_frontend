@@ -36,6 +36,7 @@ function setup(granted: Permission[] = ['pos.inventario.read', 'pos.inventario.w
     update: vi.fn().mockResolvedValue(true),
     setActive: vi.fn().mockResolvedValue(true),
     getLowStockCount: vi.fn().mockResolvedValue(0),
+    setTaxRateByFilters: vi.fn().mockResolvedValue({ status: 'updated', count: 3 }),
   } satisfies IProductRepository
 
   const access = {
@@ -267,5 +268,95 @@ describe('ProductService.create con stock inicial', () => {
     const { products, service } = setup()
     await service.create('u1', ORG_ID, input({ trackStock: false }), 20)
     expect(products.create.mock.calls[0]).toHaveLength(2)
+  })
+})
+
+describe('ProductService.setTaxRateInBulk', () => {
+  const CATEGORY_ID = '33333333-3333-4333-8333-333333333333'
+  const request = (over: object = {}) => ({
+    filters: { status: 'active' as const },
+    taxRate: '0',
+    expectedCount: 3,
+    ...over,
+  })
+
+  it('exige permiso de escritura y no sale de la empresa a la que pertenece', async () => {
+    const { products, service } = setup(['pos.inventario.read'])
+    expect(await service.setTaxRateInBulk('u1', ORG_ID, request())).toEqual({
+      error: 'No tienes permisos para modificar el inventario',
+      success: '',
+    })
+    expect((await setup().service.setTaxRateInBulk('u1', OTHER_ORG_ID, request())).error).toBe(
+      'No tienes permisos para modificar el inventario',
+    )
+    expect(products.setTaxRateByFilters).not.toHaveBeenCalled()
+  })
+
+  it('pasa al repositorio los filtros de la lista, limpios, y el total confirmado', async () => {
+    const { products, service } = setup()
+    await service.setTaxRateInBulk(
+      'u1',
+      ORG_ID,
+      request({ filters: { search: '  libro ', categoryId: CATEGORY_ID, status: 'all', lowStock: false }, expectedCount: 12 }),
+    )
+    expect(products.categoryExists).toHaveBeenCalledWith(ORG_ID, CATEGORY_ID)
+    expect(products.setTaxRateByFilters).toHaveBeenCalledWith(
+      ORG_ID,
+      { search: 'libro', categoryId: CATEGORY_ID, status: 'all', lowStock: undefined },
+      '0.00',
+      12,
+    )
+  })
+
+  it.each([
+    ['', null],
+    ['0', '0.00'],
+    ['19', '19.00'],
+    ['5,5', '5.50'],
+    ['10.25', '10.25'],
+    ['100', '100.00'],
+  ])('el impuesto "%s" se guarda como %s (vacío = tasa de la empresa, 0 = exento)', async (taxRate, saved) => {
+    const { products, service } = setup()
+    await service.setTaxRateInBulk('u1', ORG_ID, request({ taxRate }))
+    expect(products.setTaxRateByFilters.mock.calls[0][2]).toBe(saved)
+  })
+
+  it.each(['101', '-1', 'abc', '1.234', '5%', ' 12 3'])('rechaza el impuesto "%s" sin tocar nada', async (taxRate) => {
+    const { products, service } = setup()
+    const result = await service.setTaxRateInBulk('u1', ORG_ID, request({ taxRate }))
+    expect(result.error).toBe('El impuesto debe ser un número entre 0 y 100, con máximo 2 decimales')
+    expect(products.setTaxRateByFilters).not.toHaveBeenCalled()
+  })
+
+  it('una categoría que no existe se rechaza', async () => {
+    const { products, service } = setup()
+    products.categoryExists.mockResolvedValue(false)
+    const result = await service.setTaxRateInBulk('u1', ORG_ID, request({ filters: { status: 'active', categoryId: CATEGORY_ID } }))
+    expect(result.error).toBe('La categoría no existe')
+    expect(products.setTaxRateByFilters).not.toHaveBeenCalled()
+  })
+
+  it('si la lista cambió desde que la confirmó, no cambia nada y lo explica', async () => {
+    const { products, service } = setup()
+    products.setTaxRateByFilters.mockResolvedValue({ status: 'changed', count: 5 })
+    expect(await service.setTaxRateInBulk('u1', ORG_ID, request())).toEqual({
+      error: 'La lista cambió: ahora tiene 5 productos y habías confirmado 3. Revísala y vuelve a intentarlo',
+      success: '',
+    })
+    products.setTaxRateByFilters.mockResolvedValue({ status: 'changed', count: 1 })
+    expect((await service.setTaxRateInBulk('u1', ORG_ID, request())).error).toContain('ahora tiene 1 producto y')
+  })
+
+  it.each([
+    ['0', 3, 'Impuesto actualizado: 3 productos quedaron exentos'],
+    ['0', 1, 'Impuesto actualizado: 1 producto quedó exento'],
+    ['', 3, 'Impuesto actualizado: 3 productos usan la tasa de la empresa'],
+    ['', 1, 'Impuesto actualizado: 1 producto usa la tasa de la empresa'],
+    ['10', 1, 'Impuesto actualizado: 1 producto tiene 10 % de impuesto'],
+    ['5,5', 2, 'Impuesto actualizado: 2 productos tienen 5.5 % de impuesto'],
+  ])('mensaje de éxito para "%s" con %i producto(s)', async (taxRate, count, message) => {
+    const { products, service } = setup()
+    products.setTaxRateByFilters.mockResolvedValue({ status: 'updated', count })
+    expect(await service.setTaxRateInBulk('u1', ORG_ID, request({ taxRate }))).toEqual({ error: '', success: message })
   })
 })

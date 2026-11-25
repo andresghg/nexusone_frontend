@@ -1,13 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Tags } from 'lucide-react'
+import { Percent, Plus, Tags } from 'lucide-react'
 import { DataTablePagination } from '@/shared/components/data-table'
 import { Button } from '@/shared/components/ui/button'
 import { getProductHistoryAction } from '../action/stock-action'
 import type { CategoryRow, HistoryResult, ProductRow } from '../types/inventory'
 import { INVENTORY_QUERY_SPEC, toTableQuery, type InventoryQuery } from '../utils/inventoryParams'
+import { BulkTaxDialog } from './BulkTaxDialog'
 import { CategoriesDialog } from './CategoriesDialog'
+import type { DisplayFormat } from '../utils/format'
 import { HistorySheet } from './HistorySheet'
 import { InventoryToolbar } from './InventoryToolbar'
 import { MovementDialog } from './MovementDialog'
@@ -22,9 +24,11 @@ type Props = {
   query: InventoryQuery
   pageSize: number
   canWrite: boolean
+  display: DisplayFormat // moneda, idioma y zona horaria de la empresa
 }
 
 export function InventoryView({
+  display,
   organizationId,
   products,
   total,
@@ -37,6 +41,8 @@ export function InventoryView({
   const [formKey, setFormKey] = useState(0)
   const [editing, setEditing] = useState<ProductRow | null>(null)
   const [categoriesOpen, setCategoriesOpen] = useState(false)
+  const [bulkTaxOpen, setBulkTaxOpen] = useState(false)
+  const [bulkTaxKey, setBulkTaxKey] = useState(0)
   const [movementProduct, setMovementProduct] = useState<ProductRow | null>(null)
   const [movementKey, setMovementKey] = useState(0)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -79,6 +85,18 @@ export function InventoryView({
               <Tags aria-hidden />
               Categorías
             </Button>
+            {total > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setBulkTaxKey((key) => key + 1) // diálogo nuevo en cada apertura: sin la opción de la vez anterior
+                  setBulkTaxOpen(true)
+                }}
+              >
+                <Percent aria-hidden />
+                Impuesto en lote
+              </Button>
+            )}
             <Button onClick={() => openForm(null)}>
               <Plus aria-hidden />
               Nuevo producto
@@ -94,6 +112,7 @@ export function InventoryView({
         products={products}
         query={query}
         canWrite={canWrite}
+        display={display}
         onCreate={() => openForm(null)}
         onEdit={openForm}
         onMovement={openMovement}
@@ -112,6 +131,7 @@ export function InventoryView({
         onOpenChange={setHistoryOpen}
         product={history?.product ?? null}
         history={history?.promise ?? null}
+        display={display}
       />
 
       {canWrite && movementProduct && (
@@ -121,6 +141,7 @@ export function InventoryView({
           onOpenChange={(open) => !open && setMovementProduct(null)}
           organizationId={organizationId}
           product={movementProduct}
+          display={display}
         />
       )}
 
@@ -133,6 +154,16 @@ export function InventoryView({
             organizationId={organizationId}
             categories={categories}
             product={editing}
+          />
+          <BulkTaxDialog
+            key={bulkTaxKey}
+            open={bulkTaxOpen}
+            onOpenChange={setBulkTaxOpen}
+            organizationId={organizationId}
+            query={query}
+            total={total}
+            categories={categories}
+            display={display}
           />
           <CategoriesDialog
             open={categoriesOpen}

@@ -65,6 +65,10 @@ export type BillingSettings = {
   documentPrefixes: DocumentPrefixes
 }
 
+// Lo mínimo para mostrar montos, números y fechas con el formato de la empresa. Es lo único de la configuración
+// que otras pantallas (inventario) necesitan, y por eso se puede leer sin permiso de facturación.
+export type DisplayFormat = Pick<BillingSettings, 'currency' | 'currencyDecimals' | 'locale' | 'timezone'>
+
 export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   currency: 'CLP',
   currencyDecimals: 0,
@@ -76,4 +80,11 @@ export const DEFAULT_BILLING_SETTINGS: BillingSettings = {
   allowNegativeStock: false,
   defaultDueDays: 0,
   documentPrefixes: { invoice: 'F', receipt: 'R', sales_note: 'NV', credit_note: CREDIT_NOTE_DEFAULT_PREFIX },
+}
+
+export const DEFAULT_DISPLAY_FORMAT: DisplayFormat = {
+  currency: DEFAULT_BILLING_SETTINGS.currency,
+  currencyDecimals: DEFAULT_BILLING_SETTINGS.currencyDecimals,
+  locale: DEFAULT_BILLING_SETTINGS.locale,
+  timezone: DEFAULT_BILLING_SETTINGS.timezone,
 }

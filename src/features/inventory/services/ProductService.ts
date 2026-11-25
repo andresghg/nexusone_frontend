@@ -3,7 +3,7 @@ import {
   accessService,
   type IAccessResolver,
 } from '@/features/organization/services/AccessService'
-import type { ProductInput } from '../schemas/inventorySchema'
+import type { BulkTaxRateInput, ProductInput } from '../schemas/inventorySchema'
 import { fromMilli, toMilli } from '../utils/stockMath'
 import {
   productRepository,
@@ -139,6 +139,51 @@ export class ProductService {
     const updated = await this.products.setActive(access.organizationId, productId, active)
     if (!updated) return fail('El producto no existe')
     return { error: '', success: active ? 'Producto restaurado' : 'Producto archivado' }
+  }
+
+  /**
+   * Cambia el impuesto de todos los productos de la lista que la persona está viendo. Vacío = tasa de la
+   * empresa, "0" = exento, otro valor = esa tasa. Si la lista ya no tiene el total que confirmó, no cambia nada.
+   */
+  async setTaxRateInBulk(userId: string, organizationId: string, input: Omit<BulkTaxRateInput, 'organizationId'>) {
+    const access = await this.access.authorize(userId, organizationId, 'pos.inventario.write')
+    if (!access) return fail(NO_WRITE)
+
+    let taxRate: string | null
+    try {
+      taxRate = toTaxRate(input.taxRate)
+    } catch {
+      return fail('El impuesto debe ser un número entre 0 y 100, con máximo 2 decimales')
+    }
+
+    const filters = {
+      search: input.filters.search?.trim() || undefined,
+      categoryId: input.filters.categoryId,
+      status: input.filters.status,
+      lowStock: input.filters.lowStock || undefined,
+    }
+    if (filters.categoryId && !(await this.products.categoryExists(access.organizationId, filters.categoryId))) {
+      return fail('La categoría no existe')
+    }
+
+    const result = await this.products.setTaxRateByFilters(access.organizationId, filters, taxRate, input.expectedCount)
+    if (result.status === 'changed') {
+      return fail(
+        `La lista cambió: ahora tiene ${result.count} producto${result.count === 1 ? '' : 's'} y habías confirmado ${input.expectedCount}. Revísala y vuelve a intentarlo`,
+      )
+    }
+
+    const one = result.count === 1
+    const noun = one ? 'producto' : 'productos'
+    const effect =
+      taxRate === null
+        ? `${one ? 'usa' : 'usan'} la tasa de la empresa`
+        : Number(taxRate) === 0
+          ? one
+            ? 'quedó exento'
+            : 'quedaron exentos'
+          : `${one ? 'tiene' : 'tienen'} ${Number(taxRate)} % de impuesto`
+    return { error: '', success: `Impuesto actualizado: ${result.count} ${noun} ${effect}` }
   }
 
   async getLowStockCount(userId: string, organizationId: string): Promise<number> {

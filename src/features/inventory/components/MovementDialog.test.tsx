@@ -2,6 +2,7 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import toast from 'react-hot-toast'
+import { DEFAULT_DISPLAY_FORMAT, type DisplayFormat } from '@/features/billing/types/billing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerMovementAction } from '../action/stock-action'
 import type { ProductRow } from '../types/inventory'
@@ -22,10 +23,10 @@ const product: ProductRow = {
 const action = vi.mocked(registerMovementAction)
 const ok = { error: '', success: 'Entrada registrada', stock: 15 } as const
 
-const setup = () => {
+const setup = (display: DisplayFormat = DEFAULT_DISPLAY_FORMAT, row: ProductRow = product) => {
   const onOpenChange = vi.fn()
   const user = userEvent.setup({ pointerEventsCheck: 0 })
-  render(<MovementDialog open onOpenChange={onOpenChange} organizationId={ORG} product={product} />)
+  render(<MovementDialog open onOpenChange={onOpenChange} organizationId={ORG} product={row} display={display} />)
   return { user, onOpenChange }
 }
 
@@ -178,5 +179,29 @@ describe('MovementDialog · envío', () => {
     await user.type(quantity(), '0.5')
     await user.click(screen.getByRole('button', { name: 'Registrar entrada' }))
     await waitFor(() => expect(action).toHaveBeenCalledWith(expect.objectContaining({ quantity: 0.5 })))
+  })
+})
+
+describe('MovementDialog · formato de la empresa', () => {
+  const usd: DisplayFormat = { currency: 'USD', currencyDecimals: 2, locale: 'en-US', timezone: 'America/New_York' }
+
+  it('el stock actual usa el separador del idioma de la empresa', () => {
+    setup(usd, { ...product, stock: 1234.5 })
+    expect(screen.getByText('1,234.5 un')).toBeTruthy()
+  })
+
+  it('la vista previa del resultado también', async () => {
+    const { user } = setup(usd, { ...product, stock: 1234.5 })
+    await user.type(quantity(), '10')
+    expect(screen.getByText(/1,244\.5 un/)).toBeTruthy()
+  })
+
+  it('el aviso de éxito muestra el stock nuevo con ese formato', async () => {
+    action.mockResolvedValue({ error: '', success: 'Entrada registrada', stock: 1500.25 })
+    const { user } = setup(usd)
+    await user.type(quantity(), '5')
+    await user.type(screen.getByLabelText(/Motivo/), 'compra')
+    await user.click(screen.getByRole('button', { name: 'Registrar entrada' }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Entrada registrada. Stock: 1,500.25 un'))
   })
 })

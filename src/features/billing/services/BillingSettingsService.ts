@@ -3,7 +3,7 @@ import {
   type IAccessResolver,
 } from '@/features/organization/services/AccessService'
 import { BillingSettingsSchema } from '../schemas/billingSettingsSchema'
-import { DEFAULT_BILLING_SETTINGS, type BillingSettings } from '../types/billing'
+import { DEFAULT_BILLING_SETTINGS, type BillingSettings, type DisplayFormat } from '../types/billing'
 import {
   billingSettingsRepository,
   type IBillingSettingsRepository,
@@ -22,6 +22,20 @@ export class BillingSettingsService {
     const access = await this.access.authorize(userId, organizationId, 'pos.facturacion.read')
     if (!access) return null
     return (await this.settings.find(access.organizationId)) ?? structuredClone(DEFAULT_BILLING_SETTINGS)
+  }
+
+  /**
+   * Moneda, decimales, idioma y zona horaria de la empresa, para mostrar cifras y fechas. Solo estos cuatro datos
+   * (no impuestos ni numeración), así que basta con poder leer inventario O facturación. null = sin acceso.
+   */
+  async getDisplayFormat(userId: string, organizationId: string): Promise<DisplayFormat | null> {
+    const access =
+      (await this.access.authorize(userId, organizationId, 'pos.facturacion.read')) ??
+      (await this.access.authorize(userId, organizationId, 'pos.inventario.read'))
+    if (!access) return null
+    const { currency, currencyDecimals, locale, timezone } =
+      (await this.settings.find(access.organizationId)) ?? DEFAULT_BILLING_SETTINGS
+    return { currency, currencyDecimals, locale, timezone }
   }
 
   async update(userId: string, organizationId: string, input: BillingSettings) {
