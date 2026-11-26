@@ -133,7 +133,7 @@ export const navigationConfig: NavigationGroup[] = [
         label: 'Reportes',
         icon: BarChart3,
         href: `${DASHBOARD}/finanzas/reportes`,
-        description: 'Ventas, productos y cuentas por cobrar',
+        description: 'Ventas, productos, cobros y cuentas por cobrar',
         permissions: ['finanzas.reportes.read'],
       },
       {

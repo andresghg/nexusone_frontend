@@ -11,6 +11,7 @@ import { filterByPermissions, withBasePath } from '@/lib/navigation-utils'
 import { cn } from '@/lib/utils'
 import type { OrganizationOption } from '@/shared/components/navigation/OrganizationSwitcher'
 import type { CurrentUser } from '@/shared/types/CurrentUser'
+import type { AppNotification } from '@/features/notifications/types/notification'
 import { usePathname } from 'next/navigation'
 import { isBranch, type Permission, type NavigationGroup, type NavigationItem } from '@/types/navigation'
 
@@ -38,9 +39,10 @@ interface DashboardShellProps {
   children: ReactNode
   currentUser: CurrentUser
   lowStockCount: number
+  notifications: AppNotification[]
 }
 
-export function DashboardShell({ slug, organizations, canCreateOrganization, permissions, children, currentUser, lowStockCount }: DashboardShellProps) {
+export function DashboardShell({ slug, organizations, canCreateOrganization, permissions, children, currentUser, lowStockCount, notifications }: DashboardShellProps) {
   const basePath = `/dashboard/${slug}`
   const { theme, toggleTheme } = useTheme()
   const pathname = usePathname()
@@ -108,6 +110,7 @@ export function DashboardShell({ slug, organizations, canCreateOrganization, per
             theme={theme}
             onToggleTheme={toggleTheme}
             currentUser={currentUser}
+            notifications={notifications}
           />
 
           <main id="main-content" className="flex-1 p-4 md:p-6 lg:p-8">

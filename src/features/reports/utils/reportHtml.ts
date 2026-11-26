@@ -1,10 +1,12 @@
 import { escapeHtml as e } from '@/features/billing/utils/invoiceHtml'
 import { formatMoney } from '@/features/billing/utils/formatMoney'
+import { PAYMENT_METHOD_LABELS } from '@/features/billing/types/billing'
 import { formatStock } from '@/features/inventory/utils/format'
 import {
   AGING_LABELS,
   type DateRange,
   type Granularity,
+  type PaymentsReport,
   type ReceivablesReport,
   type ReportExport,
   type ReportExportMeta,
@@ -12,6 +14,7 @@ import {
   type SalesReport,
   type TopProductsReport,
 } from '../types/report'
+import { averagePayment } from './paymentsMath'
 import { bucketLabel, bucketTick, calendarDate, percentOf } from './reportFormat'
 
 // El reporte listo para imprimir o guardar como PDF: una página HTML completa y autocontenida (sin recursos
@@ -43,7 +46,12 @@ const STYLES = `
   footer { margin-top: 18px; font-size: 10px; color: #777; }
 `
 
-const TITLES = { ventas: 'Reporte de ventas', productos: 'Productos más vendidos', cobrar: 'Cuentas por cobrar' } as const
+const TITLES = {
+  ventas: 'Reporte de ventas',
+  productos: 'Productos más vendidos',
+  cobros: 'Cobros por forma de pago',
+  cobrar: 'Cuentas por cobrar',
+} as const
 
 type Money = (value: number) => string
 type Kpi = { label: string; value: string; detail?: string; warn?: boolean }
@@ -150,6 +158,25 @@ function productsBody(report: TopProductsReport, money: Money): string {
   )
 }
 
+function paymentsBody(report: PaymentsReport, money: Money): string {
+  if (report.payments === 0) return '<p class="muted">Sin cobros en este período.</p>'
+  const rows = report.methods
+    .map(
+      (row) =>
+        `<tr><td>${e(PAYMENT_METHOD_LABELS[row.method])}</td><td class="num">${row.payments}</td><td class="num">${e(money(row.amount))}</td><td class="num">${percentOf(row.amount, report.total)} %</td></tr>`,
+    )
+    .join('')
+  return (
+    kpiList([
+      { label: 'Cobrado', value: money(report.total), detail: `${report.payments} cobro${report.payments === 1 ? '' : 's'} en el período` },
+      { label: 'Cobro promedio', value: money(averagePayment(report.total, report.payments, report.display.currencyDecimals)) },
+    ]) +
+    `<h2>Por forma de pago</h2><table><thead><tr><th>Forma de pago</th><th class="num">Cobros</th><th class="num">Monto</th><th class="num">% del total</th></tr></thead>` +
+    `<tbody>${rows}</tbody><tfoot><tr><th>Total</th><td class="num">${report.payments}</td><td class="num">${e(money(report.total))}</td><td class="num">100 %</td></tr></tfoot></table>` +
+    `<p class="muted">Cuenta los cobros por la fecha en que se cobraron, no por la del documento. Los cobros anulados no suman y las devoluciones de dinero (que se hacen fuera del sistema) no se descuentan.</p>`
+  )
+}
+
 function receivablesBody(report: ReceivablesReport, money: Money): string {
   const { display, asOf } = report
   if (report.documents === 0) return `<p class="muted">No hay nada por cobrar al ${e(calendarDate(asOf, display.locale))}.</p>`
@@ -199,7 +226,14 @@ export function buildReportHtml(data: ReportExport, meta: ReportExportMeta): str
 
   const subtitle =
     data.tab === 'cobrar' ? `Al ${calendarDate(data.report.asOf, display.locale)}` : periodText(data.report.range, display.locale)
-  const body = data.tab === 'ventas' ? salesBody(data.report, money) : data.tab === 'productos' ? productsBody(data.report, money) : receivablesBody(data.report, money)
+  const body =
+    data.tab === 'ventas'
+      ? salesBody(data.report, money)
+      : data.tab === 'productos'
+        ? productsBody(data.report, money)
+        : data.tab === 'cobros'
+          ? paymentsBody(data.report, money)
+          : receivablesBody(data.report, money)
 
   let generated: string
   try {

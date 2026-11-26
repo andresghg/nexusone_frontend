@@ -51,6 +51,7 @@ describe('voidInvoiceAction', () => {
     expect(result).toEqual({ error: '', success: 'Documento anulado: F-000012' })
     expect(voidInvoice).toHaveBeenCalledWith('user-1', ORG, { invoiceId: INVOICE, reason: 'Duplicada' })
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]/pos/facturacion', 'page')
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]', 'layout') // la campana de notificaciones
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]/pos/facturacion/[id]', 'page')
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]/pos/inventario', 'page') // devuelve stock
   })
@@ -101,6 +102,7 @@ describe('issueInvoiceAction', () => {
     expect(sent).not.toHaveProperty('organizationId')
     expect(sent).toMatchObject({ idempotencyKey: KEY, documentType: 'invoice' })
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]/pos/facturacion', 'page')
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]', 'layout') // la campana de notificaciones
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]/pos/inventario', 'page') // descuenta stock
   })
 
@@ -160,6 +162,7 @@ describe('addPaymentAction', () => {
     expect(await addPaymentAction(payment({ reference: ' T-1 ' }))).toEqual({ error: '', success: 'Cobro registrado. Saldo pendiente: $1.380' })
     expect(addPayment).toHaveBeenCalledWith('user-1', ORG, { invoiceId: INVOICE, amount: 1000, method: 'cash', reference: 'T-1' })
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]/pos/facturacion', 'page')
+    expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]', 'layout') // la campana de notificaciones
     expect(revalidatePath).toHaveBeenCalledWith('/dashboard/[slug]/pos/facturacion/[id]', 'page')
   })
 

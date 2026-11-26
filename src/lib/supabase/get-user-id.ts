@@ -1,3 +1,4 @@
+import 'server-only'
 import { createClient } from './server'
 
 /** Id del usuario autenticado en el servidor (o undefined si no hay sesión). */

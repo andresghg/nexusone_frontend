@@ -1,3 +1,4 @@
+import 'server-only'
 import { and, desc, eq, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import { products, profiles, stockMovements } from '@/db/schema'

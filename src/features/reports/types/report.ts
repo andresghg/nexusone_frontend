@@ -1,4 +1,4 @@
-import type { DisplayFormat } from '@/features/billing/types/billing'
+import type { DisplayFormat, PaymentMethod } from '@/features/billing/types/billing'
 
 // Reportes de ventas, productos y cuentas por cobrar. Todos los montos están en la moneda de la empresa
 // (unidades mayores: pesos, dólares) y todas las fechas son de calendario en la zona horaria de la empresa.
@@ -98,6 +98,16 @@ export type ReceivablesReport = {
   debtors: Debtor[] // los que más deben, de mayor a menor
 }
 
+export type PaymentMethodRow = { method: PaymentMethod; payments: number; amount: number }
+
+export type PaymentsReport = {
+  range: DateRange
+  display: DisplayFormat
+  payments: number // cantidad de cobros del período
+  total: number // lo cobrado: cobros vigentes (no anulados) con fecha de cobro dentro del período
+  methods: PaymentMethodRow[] // solo las formas de pago con cobros, de mayor a menor monto
+}
+
 export type DashboardSummary = {
   display: DisplayFormat
   asOf: string // el "hoy" de la empresa (YYYY-MM-DD) con que se calcularon las cifras
@@ -113,9 +123,10 @@ export type DashboardSummary = {
 export type ReportExport =
   | { tab: 'ventas'; report: SalesReport }
   | { tab: 'productos'; report: TopProductsReport }
+  | { tab: 'cobros'; report: PaymentsReport }
   | { tab: 'cobrar'; report: ReceivablesReport }
 
 export type ReportExportMeta = { companyName: string; generatedAt: Date }
 
 // Lo que muestra la pantalla de una pestaña: el reporte, o el motivo por el que no hay reporte.
-export type ReportData = ReportExport | { tab: 'ventas' | 'productos' | 'cobrar'; error: string }
+export type ReportData = ReportExport | { tab: 'ventas' | 'productos' | 'cobros' | 'cobrar'; error: string }

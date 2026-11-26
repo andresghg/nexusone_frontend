@@ -23,6 +23,7 @@ import {
 } from '../utils/reportParams'
 import { rangeError } from '../utils/reportRange'
 import { ExportMenu } from './ExportMenu'
+import { PaymentsTab } from './PaymentsTab'
 import { ProductsTab } from './ProductsTab'
 import { ReceivablesTab } from './ReceivablesTab'
 import { SalesTab } from './SalesTab'
@@ -77,7 +78,7 @@ export function ReportsView({ query, range, today, display, data, companyName, p
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold tracking-tight">Reportes</h1>
           <p className="text-sm text-muted-foreground">
-            Ventas, productos y cuentas por cobrar de tu empresa. Los montos están en {display.currency}.
+            Ventas, productos, cobros y cuentas por cobrar de tu empresa. Los montos están en {display.currency}.
           </p>
         </div>
         <ExportMenu
@@ -208,6 +209,8 @@ function ReportBody({ data }: { data: ReportData }) {
       return <SalesTab report={data.report} />
     case 'productos':
       return <ProductsTab report={data.report} />
+    case 'cobros':
+      return <PaymentsTab report={data.report} />
     case 'cobrar':
       return <ReceivablesTab report={data.report} />
   }

@@ -1,5 +1,5 @@
 import { billingSettingsRepository, type IBillingSettingsRepository } from '@/features/billing/services/BillingSettingsRepository'
-import { DEFAULT_BILLING_SETTINGS, type DisplayFormat } from '@/features/billing/types/billing'
+import { DEFAULT_BILLING_SETTINGS, PAYMENT_METHODS, type DisplayFormat, type PaymentMethod } from '@/features/billing/types/billing'
 import { addDays, todayInTimezone } from '@/features/billing/utils/dates'
 import { accessService, type IAccessResolver } from '@/features/organization/services/AccessService'
 import type { Permission } from '@/types/navigation'
@@ -7,6 +7,7 @@ import {
   AGING_BUCKETS,
   type DashboardSummary,
   type DateRange,
+  type PaymentsReport,
   type ProductRank,
   type ReceivablesReport,
   type SalesReport,
@@ -98,6 +99,45 @@ export class ReportService {
     const { display } = await this.load(access.organizationId)
     const products = await this.reports.topProducts(access.organizationId, range, display.timezone, rank, limit)
     return { report: { range, rank, display, products } }
+  }
+
+  /**
+   * Lo cobrado en el período, por forma de pago. Cuenta los cobros vigentes (un cobro anulado, o el de un documento
+   * anulado, no cuenta) en la fecha en que se cobraron, sin importar cuándo se emitió el documento. Las devoluciones
+   * de dinero se hacen fuera del sistema y por eso no se descuentan aquí.
+   */
+  async payments(userId: string, organizationId: string, range: DateRange): Promise<Failure | { report: PaymentsReport }> {
+    const access = await this.authorize(userId, organizationId, 'finanzas.reportes.read')
+    if (!access) return fail(NO_ACCESS)
+    const invalid = rangeError(range)
+    if (invalid) return fail(invalid)
+
+    const { display } = await this.load(access.organizationId)
+    const decimals = display.currencyDecimals
+    const rows = await this.reports.paymentsByMethod(access.organizationId, range, display.timezone)
+
+    // Una forma de pago desconocida (no debería existir: la base lo impide) se cuenta como "Otro", no se pierde
+    const byMethod = new Map<PaymentMethod, { payments: number; minor: number }>()
+    for (const row of rows) {
+      const method = (PAYMENT_METHODS as readonly string[]).includes(row.method) ? (row.method as PaymentMethod) : 'other'
+      const acc = byMethod.get(method) ?? { payments: 0, minor: 0 }
+      byMethod.set(method, { payments: acc.payments + row.payments, minor: acc.minor + minor(row.amount, decimals) })
+    }
+
+    const methods = [...byMethod]
+      .map(([method, acc]) => ({ method, payments: acc.payments, amount: fromMinorUnits(acc.minor, decimals) }))
+      .sort((a, b) => b.amount - a.amount || PAYMENT_METHODS.indexOf(a.method) - PAYMENT_METHODS.indexOf(b.method))
+    const totalMinor = [...byMethod.values()].reduce((sum, acc) => sum + acc.minor, 0)
+
+    return {
+      report: {
+        range,
+        display,
+        payments: methods.reduce((sum, row) => sum + row.payments, 0),
+        total: fromMinorUnits(totalMinor, decimals),
+        methods,
+      },
+    }
   }
 
   /** Lo que se debe hoy: por tramo de atraso y por cliente. Descuenta notas de crédito y cobros. */

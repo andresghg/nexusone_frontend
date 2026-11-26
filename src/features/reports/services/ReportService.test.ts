@@ -5,7 +5,7 @@ import type { IBillingSettingsRepository } from '@/features/billing/services/Bil
 import { DEFAULT_BILLING_SETTINGS, type BillingSettings } from '@/features/billing/types/billing'
 import type { AgingRow, Debtor, SalesBucketRow, TopProduct } from '../types/report'
 import { ReportService, TOP_PRODUCTS_DEFAULT, TOP_PRODUCTS_MAX } from './ReportService'
-import type { IReportRepository } from './ReportRepository'
+import type { IReportRepository, PaymentMethodTotals } from './ReportRepository'
 
 const ORG = 'org-1'
 const OTHER_ORG = 'org-2'
@@ -26,12 +26,14 @@ function setup({
   buckets = [] as SalesBucketRow[],
   collected = 0,
   products = [] as TopProduct[],
+  paymentRows = [] as PaymentMethodTotals[],
   receivables = { aging: aging(), debtors: [] as Debtor[] },
 } = {}) {
   const repo = {
     salesBuckets: vi.fn().mockResolvedValue(buckets),
     collected: vi.fn().mockResolvedValue(collected),
     topProducts: vi.fn().mockResolvedValue(products),
+    paymentsByMethod: vi.fn().mockResolvedValue(paymentRows),
     receivables: vi.fn().mockResolvedValue(receivables),
   } satisfies IReportRepository
   const settingsRepo = { find: vi.fn().mockResolvedValue(settings), save: vi.fn() } satisfies IBillingSettingsRepository
@@ -51,6 +53,7 @@ describe('ReportService · permisos', () => {
   it.each([
     ['ventas', (s: ReportService) => s.sales('u1', ORG, range)],
     ['productos', (s: ReportService) => s.topProducts('u1', ORG, range)],
+    ['cobros', (s: ReportService) => s.payments('u1', ORG, range)],
     ['cuentas por cobrar', (s: ReportService) => s.receivables('u1', ORG)],
   ])('%s: exige el permiso de reportes (el de facturación no basta)', async (_name, call) => {
     const { repo, service } = setup({ granted: ['pos.facturacion.read'] })
@@ -61,6 +64,7 @@ describe('ReportService · permisos', () => {
   it.each([
     ['ventas', (s: ReportService) => s.sales('u1', OTHER_ORG, range)],
     ['productos', (s: ReportService) => s.topProducts('u1', OTHER_ORG, range)],
+    ['cobros', (s: ReportService) => s.payments('u1', OTHER_ORG, range)],
     ['cuentas por cobrar', (s: ReportService) => s.receivables('u1', OTHER_ORG)],
   ])('%s: no sale de la empresa a la que pertenece', async (_name, call) => {
     const { repo, service } = setup()
@@ -171,6 +175,67 @@ describe('ReportService.topProducts', () => {
     const products: TopProduct[] = [{ productId: 'p1', sku: 'COLA', description: 'Cola', unit: 'un', quantity: 3, total: 3570, net: 3000 }]
     const result = await setup({ products }).service.topProducts('u1', ORG, range)
     expect(result).toMatchObject({ report: { range, rank: 'revenue', products, display: { currency: 'CLP' } } })
+  })
+})
+
+describe('ReportService.payments', () => {
+  const range = { from: '2026-11-01', to: '2026-11-23' }
+  const row = (method: string, payments: number, amount: number): PaymentMethodTotals => ({ method, payments, amount })
+  const run = async (options: Parameters<typeof setup>[0] = {}) => {
+    const ctx = setup(options)
+    const result = await ctx.service.payments('u1', ORG, range)
+    if (!('report' in result)) throw new Error(result.error)
+    return { ...ctx, report: result.report }
+  }
+
+  it('agrupa por forma de pago, de mayor a menor monto, con el total y la cantidad de cobros', async () => {
+    const { report } = await run({ paymentRows: [row('cash', 4, 10_000), row('card', 2, 50_000), row('transfer', 1, 25_000)] })
+    expect(report.methods).toEqual([
+      { method: 'card', payments: 2, amount: 50_000 },
+      { method: 'transfer', payments: 1, amount: 25_000 },
+      { method: 'cash', payments: 4, amount: 10_000 },
+    ])
+    expect(report.total).toBe(85_000)
+    expect(report.payments).toBe(7)
+    expect(report.range).toEqual(range)
+  })
+
+  it('con el mismo monto, el orden es el de siempre (efectivo, transferencia, tarjeta, otro)', async () => {
+    const { report } = await run({ paymentRows: [row('other', 1, 100), row('card', 1, 100), row('cash', 1, 100), row('transfer', 1, 100)] })
+    expect(report.methods.map((m) => m.method)).toEqual(['cash', 'transfer', 'card', 'other'])
+  })
+
+  it('una forma de pago desconocida se cuenta como "Otro" y se suma con la que ya había, sin perder dinero', async () => {
+    const { report } = await run({ paymentRows: [row('other', 1, 100), row('cheque', 2, 250), row('cash', 1, 50)] })
+    expect(report.methods).toEqual([
+      { method: 'other', payments: 3, amount: 350 },
+      { method: 'cash', payments: 1, amount: 50 },
+    ])
+    expect(report.total).toBe(400)
+    expect(report.payments).toBe(4)
+  })
+
+  it('suma en unidades mínimas: 0,10 + 0,20 da 0,30 exacto', async () => {
+    const { report } = await run({ settings: usd, paymentRows: [row('cash', 1, 0.1), row('card', 1, 0.2)] })
+    expect(report.total).toBe(0.3)
+  })
+
+  it('sin cobros: todo en cero y sin formas de pago', async () => {
+    const { report } = await run()
+    expect(report).toMatchObject({ payments: 0, total: 0, methods: [] })
+  })
+
+  it('cuenta los días en la zona horaria de la empresa y devuelve su formato', async () => {
+    const { repo, report } = await run({ settings: usd })
+    expect(repo.paymentsByMethod).toHaveBeenCalledWith(ORG, range, 'America/New_York')
+    expect(report.display).toMatchObject({ currency: 'USD', currencyDecimals: 2, locale: 'en-US', timezone: 'America/New_York' })
+  })
+
+  it('un rango inválido devuelve el error y no consulta la base', async () => {
+    const { service, repo } = setup()
+    const result = await service.payments('u1', ORG, { from: '2026-11-23', to: '2026-11-01' })
+    expect('error' in result).toBe(true)
+    expect(repo.paymentsByMethod).not.toHaveBeenCalled()
   })
 })
 

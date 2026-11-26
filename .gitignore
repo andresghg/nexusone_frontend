@@ -24,6 +24,8 @@ dist-ssr
 *.sw?
 
 
+*.tsbuildinfo
+
 node_modules/
 .next/
 .env

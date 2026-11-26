@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs'
 import { afterEach, describe, expect, it } from 'vitest'
 import { DEFAULT_DISPLAY_FORMAT } from '@/features/billing/types/billing'
-import type { ReceivablesReport, ReportExport, SalesPoint, SalesReport, TopProductsReport } from '../types/report'
+import type { PaymentsReport, ReceivablesReport, ReportExport, SalesPoint, SalesReport, TopProductsReport } from '../types/report'
 import { buildReportWorkbook, moneyFormat } from './reportXlsx'
 
 const meta = { companyName: 'Acme SpA', generatedAt: new Date('2026-11-24T15:00:00Z') }
@@ -41,6 +41,16 @@ const receivables = (): ReceivablesReport => ({
     { customerId: 'c1', name: 'Ana Pérez', documents: 2, amount: 3570, oldestDueDate: '2026-10-01' },
     { customerId: null, name: 'Consumidor final', documents: 1, amount: 1190, oldestDueDate: null },
   ],
+})
+
+const payments = (over: Partial<PaymentsReport> = {}): PaymentsReport => ({
+  range: { from: '2026-11-01', to: '2026-11-23' }, display, payments: 7, total: 85000,
+  methods: [
+    { method: 'card', payments: 2, amount: 50000 },
+    { method: 'transfer', payments: 1, amount: 25000 },
+    { method: 'cash', payments: 4, amount: 10000 },
+  ],
+  ...over,
 })
 
 async function open(data: ReportExport) {
@@ -175,6 +185,46 @@ describe('buildReportWorkbook · productos', () => {
     const sheet = (await open({ tab: 'productos', report: { ...topProducts(), products: [] } })).getWorksheet('Productos')!
     expect(findRow(sheet, 'N°')).toBeTruthy()
     expect(sheet.autoFilter).toBeUndefined()
+  })
+})
+
+describe('buildReportWorkbook · cobros', () => {
+  it('una hoja "Cobros" con el título del archivo y el encabezado', async () => {
+    const book = await open({ tab: 'cobros', report: payments() })
+    expect(book.title).toBe('Cobros por forma de pago')
+    const sheet = book.getWorksheet('Cobros')!
+    expect(rowsOf(sheet)[1][0]).toBe('Cobros por forma de pago')
+    expect(rowsOf(sheet)[3][0]).toBe('Período: 2026-11-01 al 2026-11-23')
+  })
+
+  it('una fila por forma de pago con cantidad, monto y porcentaje como números', async () => {
+    const sheet = (await open({ tab: 'cobros', report: payments() })).getWorksheet('Cobros')!
+    expect(findRow(sheet, 'Tarjeta')!.values).toEqual([undefined, 'Tarjeta', 2, 50000, 50000 / 85000])
+    expect(findRow(sheet, 'Efectivo')!.getCell(3).value).toBe(10000)
+    expect(findRow(sheet, 'Tarjeta')!.getCell(4).numFmt).toBe('0.0%')
+    expect(findRow(sheet, 'Tarjeta')!.getCell(3).numFmt).toBe(moneyFormat(0))
+  })
+
+  it('el total son fórmulas con su resultado ya calculado', async () => {
+    const sheet = (await open({ tab: 'cobros', report: payments() })).getWorksheet('Cobros')!
+    const total = findRow(sheet, 'Total')!
+    expect(total.getCell(2).value).toMatchObject({ result: 7 })
+    expect(total.getCell(3).value).toMatchObject({ result: 85000 })
+    expect((total.getCell(3).value as { formula: string }).formula).toMatch(/^SUM\(C\d+:C\d+\)$/)
+    expect(total.getCell(4).value).toMatchObject({ result: 1 })
+  })
+
+  it('sin cobros no inventa fórmulas sobre rangos vacíos', async () => {
+    const sheet = (await open({ tab: 'cobros', report: payments({ payments: 0, total: 0, methods: [] }) })).getWorksheet('Cobros')!
+    const total = findRow(sheet, 'Total')!
+    expect(total.getCell(2).value).toBe(0)
+    expect(total.getCell(3).value).toBe(0)
+  })
+
+  it('usa los decimales de la moneda', async () => {
+    const usd = { ...display, currency: 'USD', currencyDecimals: 2 }
+    const sheet = (await open({ tab: 'cobros', report: payments({ display: usd }) })).getWorksheet('Cobros')!
+    expect(findRow(sheet, 'Tarjeta')!.getCell(3).numFmt).toBe(moneyFormat(2))
   })
 })
 

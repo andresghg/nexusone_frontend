@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReportsQuery } from '../utils/reportParams'
-import { display, productsReport, receivablesReport, salesReport } from './fixtures.test-util'
+import { display, paymentsReport, productsReport, receivablesReport, salesReport } from './fixtures.test-util'
 import type { ReportData } from '../types/report'
 import { ReportsView } from './ReportsView'
 
@@ -24,9 +24,11 @@ const setup = ({ query = {}, data, range = { from: '2026-11-01', to: '2026-11-23
     data ??
     (q.tab === 'productos'
       ? { tab: 'productos', report: productsReport() }
-      : q.tab === 'cobrar'
-        ? { tab: 'cobrar', report: receivablesReport() }
-        : { tab: 'ventas', report: salesReport() })
+      : q.tab === 'cobros'
+        ? { tab: 'cobros', report: paymentsReport() }
+        : q.tab === 'cobrar'
+          ? { tab: 'cobrar', report: receivablesReport() }
+          : { tab: 'ventas', report: salesReport() })
   const user = userEvent.setup({ pointerEventsCheck: 0, delay: null })
   render(<ReportsView query={q} range={range} today="2026-11-23" display={display} data={content} companyName="Acme SpA" print={print} />)
   return { user }
@@ -41,11 +43,11 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('ReportsView · estructura', () => {
-  it('título, descripción con la moneda y las tres pestañas con la activa marcada', () => {
+  it('título, descripción con la moneda y las cuatro pestañas con la activa marcada', () => {
     setup()
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Reportes')
     expect(screen.getByText(/Los montos están en CLP/)).toBeTruthy()
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Ventas', 'Productos', 'Por cobrar'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Ventas', 'Productos', 'Cobros', 'Por cobrar'])
     expect(tab('Ventas').getAttribute('aria-selected')).toBe('true')
     expect(tab('Productos').getAttribute('aria-selected')).toBe('false')
   })
@@ -53,12 +55,13 @@ describe('ReportsView · estructura', () => {
   it.each([
     ['ventas', 'Ventas netas por día'],
     ['productos', 'Más vendidos por importe'],
+    ['cobros', 'Por forma de pago'],
     ['cobrar', 'Antigüedad de la deuda'],
   ] as const)('en la pestaña %s muestra solo su contenido', (name, heading) => {
     setup({ query: { tab: name } })
     expect(screen.getByText(heading)).toBeTruthy()
     expect(screen.getAllByRole('tabpanel')).toHaveLength(1)
-    expect(tab(name === 'cobrar' ? 'Por cobrar' : name === 'ventas' ? 'Ventas' : 'Productos').getAttribute('aria-selected')).toBe('true')
+    expect(tab({ cobrar: 'Por cobrar', ventas: 'Ventas', productos: 'Productos', cobros: 'Cobros' }[name]).getAttribute('aria-selected')).toBe('true')
   })
 
   it('el contenido no está ocupado cuando no se está cambiando de reporte', () => {

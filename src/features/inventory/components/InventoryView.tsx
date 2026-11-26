@@ -136,7 +136,7 @@ export function InventoryView({
 
       {canWrite && movementProduct && (
         <MovementDialog
-          key={movementKey}
+          key={`movement-${movementKey}`}
           open
           onOpenChange={(open) => !open && setMovementProduct(null)}
           organizationId={organizationId}
@@ -148,15 +148,16 @@ export function InventoryView({
       {canWrite && (
         <>
           <ProductFormSheet
-            key={formKey}
+            key={`product-form-${formKey}`}
             open={formOpen}
             onOpenChange={setFormOpen}
             organizationId={organizationId}
             categories={categories}
             product={editing}
+            currency={display.currency}
           />
           <BulkTaxDialog
-            key={bulkTaxKey}
+            key={`bulk-tax-${bulkTaxKey}`}
             open={bulkTaxOpen}
             onOpenChange={setBulkTaxOpen}
             organizationId={organizationId}
@@ -166,6 +167,7 @@ export function InventoryView({
             display={display}
           />
           <CategoriesDialog
+            key={`categories-${categoriesOpen}`}
             open={categoriesOpen}
             onOpenChange={setCategoriesOpen}
             organizationId={organizationId}

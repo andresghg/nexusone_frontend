@@ -1,5 +1,5 @@
 import { DEFAULT_DISPLAY_FORMAT } from '@/features/billing/types/billing'
-import type { ReceivablesReport, SalesPoint, SalesReport, TopProductsReport } from '../types/report'
+import type { PaymentsReport, ReceivablesReport, SalesPoint, SalesReport, TopProductsReport } from '../types/report'
 
 // Datos de ejemplo para las pruebas de las pantallas de reportes (no es un test: no tiene sufijo .test)
 export const display = DEFAULT_DISPLAY_FORMAT
@@ -39,6 +39,19 @@ export const productsReport = (over: Partial<TopProductsReport> = {}): TopProduc
     { productId: 'p1', sku: 'COLA', description: 'Cola 1L', unit: 'un', quantity: 4, total: 4760, net: 4000 },
     { productId: 'p2', sku: 'AGUA', description: 'Agua 500ml', unit: 'un', quantity: 10, total: 4000, net: 3361 },
     { productId: null, sku: null, description: 'Flete', unit: 'un', quantity: 1.5, total: 2000, net: 1681 },
+  ],
+  ...over,
+})
+
+export const paymentsReport = (over: Partial<PaymentsReport> = {}): PaymentsReport => ({
+  range: { from: '2026-11-01', to: '2026-11-23' },
+  display,
+  payments: 7,
+  total: 85000,
+  methods: [
+    { method: 'card', payments: 2, amount: 50000 },
+    { method: 'transfer', payments: 1, amount: 25000 },
+    { method: 'cash', payments: 4, amount: 10000 },
   ],
   ...over,
 })

@@ -1,3 +1,4 @@
+import 'server-only'
 import { db } from "@/db";
 import type { SignUpInput, SignInInput } from "../schemas/authSchema"
 import { createClient } from "@/lib/supabase/server"

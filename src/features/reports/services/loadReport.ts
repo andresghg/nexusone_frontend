@@ -1,3 +1,4 @@
+import 'server-only'
 import { DEFAULT_DISPLAY_FORMAT, type DisplayFormat } from '@/features/billing/types/billing'
 import { todayInTimezone } from '@/features/billing/utils/dates'
 import type { DateRange, ReportData } from '../types/report'
@@ -50,6 +51,11 @@ export async function loadReport(
       limit: options.productLimit,
     })
     return done('report' in result ? { tab: 'productos', report: result.report } : { tab: 'productos', error: result.error })
+  }
+
+  if (query.tab === 'cobros') {
+    const result = await service.payments(userId, organizationId, range)
+    return done('report' in result ? { tab: 'cobros', report: result.report } : { tab: 'cobros', error: result.error })
   }
 
   const result = await service.sales(userId, organizationId, range)

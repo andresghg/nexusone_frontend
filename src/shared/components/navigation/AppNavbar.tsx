@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, ChevronRight, Menu, Moon, Plus, Sun } from 'lucide-react'
+import { ChevronRight, Menu, Moon, Plus, Sun } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/shared/components/ui/avatar'
 import { Button } from '@/shared/components/ui/button'
 import {
@@ -16,6 +16,8 @@ import { signOutAction } from '@/features/auth/actions/auth-action'
 import { findBreadcrumbs } from '@/lib/navigation-utils'
 import type { NavigationGroup } from '@/types/navigation'
 import { GlobalSearch } from './GlobalSearch'
+import { NotificationsMenu } from '@/features/notifications/components/NotificationsMenu'
+import type { AppNotification } from '@/features/notifications/types/notification'
 import type { CurrentUser } from '@/shared/types/CurrentUser'
 
 interface AppNavbarProps {
@@ -25,6 +27,7 @@ interface AppNavbarProps {
   theme: 'light' | 'dark'
   onToggleTheme: () => void
   currentUser: CurrentUser
+  notifications: AppNotification[]
 }
 
 /**
@@ -35,10 +38,10 @@ interface AppNavbarProps {
  * - Breadcrumb      → orientación cuando el sidebar está colapsado u oculto.
  * - Buscador ⌘K     → acceso rápido cuando haya 15+ módulos.
  * - Nueva factura   → acción principal del POS (la más frecuente del negocio).
- * - Notificaciones  → eventos operativos (stock bajo, cobros).
+ * - Notificaciones  → avisos reales derivados del negocio (facturas vencidas o por vencer, stock bajo).
  * - Tema / usuario  → utilidades de sesión.
  */
-export function AppNavbar({ groups, basePath, onOpenMobile, theme, onToggleTheme, currentUser }: AppNavbarProps) {
+export function AppNavbar({ groups, basePath, onOpenMobile, theme, onToggleTheme, currentUser, notifications }: AppNavbarProps) {
   const breadcrumbs = findBreadcrumbs(groups, basePath)
 
   return (
@@ -82,28 +85,7 @@ export function AppNavbar({ groups, basePath, onOpenMobile, theme, onToggleTheme
           </AppLink>
         </Button>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" aria-label="Notificaciones" className="relative size-9">
-              <Bell className="size-4" aria-hidden />
-              <span className="absolute right-2 top-2 size-1.5 rounded-full bg-destructive" aria-hidden />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-72">
-            <DropdownMenuLabel>Notificaciones</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="flex-col items-start gap-1">
-              <span className="text-sm font-medium">Stock bajo</span>
-              <span className="text-xs text-muted-foreground">
-                3 productos por debajo del mínimo
-              </span>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="flex-col items-start gap-1">
-              <span className="text-sm font-medium">Factura por vencer</span>
-              <span className="text-xs text-muted-foreground">F-0042 vence mañana</span>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <NotificationsMenu notifications={notifications} />
 
         <Button
           variant="ghost"

@@ -1,3 +1,4 @@
+import 'server-only'
 import { and, asc, desc, eq, isNull, ne, sql } from 'drizzle-orm'
 import { db } from '@/db'
 import { invoiceItems, invoicePayments, invoices } from '@/db/schema'
@@ -18,11 +19,15 @@ export type ReceivablesData = {
   debtors: Debtor[] // los que más deben, de mayor a menor
 }
 
+export type PaymentMethodTotals = { method: string; payments: number; amount: number }
+
 export interface IReportRepository {
   /** Facturado y acreditado por día o mes (solo períodos con movimiento). Las anuladas no cuentan. */
   salesBuckets(organizationId: string, range: DateRange, timezone: string, granularity: Granularity): Promise<SalesBucketRow[]>
   /** Cobros vigentes (no anulados) con fecha de cobro dentro del rango. */
   collected(organizationId: string, range: DateRange, timezone: string): Promise<number>
+  /** Cobros vigentes (no anulados) con fecha de cobro dentro del rango, por forma de pago. Solo las que tienen cobros. */
+  paymentsByMethod(organizationId: string, range: DateRange, timezone: string): Promise<PaymentMethodTotals[]>
   /** Productos vendidos en el rango, netos de notas de crédito, ya ordenados. */
   topProducts(
     organizationId: string,
@@ -43,6 +48,25 @@ const inRange = (tz: string, column: unknown, range: DateRange) =>
 const num = (value: string | number | null | undefined) => Number(value ?? 0)
 
 export class ReportRepository implements IReportRepository {
+  async paymentsByMethod(organizationId: string, range: DateRange, timezone: string): Promise<PaymentMethodTotals[]> {
+    const rows = await db
+      .select({
+        method: invoicePayments.method,
+        payments: sql<string>`count(*)`,
+        amount: sql<string>`coalesce(sum(${invoicePayments.amount}), 0)`,
+      })
+      .from(invoicePayments)
+      .where(
+        and(
+          eq(invoicePayments.organizationId, organizationId),
+          isNull(invoicePayments.voidedAt),
+          inRange(timezone, invoicePayments.paidAt, range),
+        ),
+      )
+      .groupBy(invoicePayments.method)
+    return rows.map((row): PaymentMethodTotals => ({ method: row.method, payments: num(row.payments), amount: num(row.amount) }))
+  }
+
   async salesBuckets(organizationId: string, range: DateRange, timezone: string, granularity: Granularity) {
     const isNote = sql`${invoices.documentType} = 'credit_note'`
     const format = granularity === 'day' ? 'YYYY-MM-DD' : 'YYYY-MM'

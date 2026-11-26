@@ -1,3 +1,4 @@
+import 'server-only'
 import { and, desc, eq, gt, isNull } from 'drizzle-orm'
 import { db } from '@/db'
 import { organizationInvitations, organizationMembers, organizations } from '@/db/schema'

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_DISPLAY_FORMAT } from '@/features/billing/types/billing'
-import type { ReceivablesReport, ReportExportMeta, SalesPoint, SalesReport, TopProductsReport } from '../types/report'
+import type { PaymentsReport, ReceivablesReport, ReportExportMeta, SalesPoint, SalesReport, TopProductsReport } from '../types/report'
 import { buildReportHtml, salesChartSvg } from './reportHtml'
 
 const display = DEFAULT_DISPLAY_FORMAT
@@ -171,6 +171,51 @@ describe('buildReportHtml · productos', () => {
   it('sin productos lo dice', () => {
     const html = buildReportHtml({ tab: 'productos', report: { ...products(), products: [] } }, meta)
     expect(html).toContain('Sin productos vendidos en este período.')
+    expect(html).not.toContain('<table')
+  })
+})
+
+const payments = (over: Partial<PaymentsReport> = {}): PaymentsReport => ({
+  range: { from: '2026-11-01', to: '2026-11-23' }, display, payments: 7, total: 85000,
+  methods: [
+    { method: 'card', payments: 2, amount: 50000 },
+    { method: 'transfer', payments: 1, amount: 25000 },
+    { method: 'cash', payments: 4, amount: 10000 },
+  ],
+  ...over,
+})
+
+describe('buildReportHtml · cobros', () => {
+  it('lleva el período y el título propios', () => {
+    const html = buildReportHtml({ tab: 'cobros', report: payments() }, meta)
+    expect(html).toContain('<title>Cobros por forma de pago — Acme SpA</title>')
+    expect(flat(html)).toMatch(/Del 1 nov.*2026 al 23 nov.*2026 · Montos en CLP/i)
+  })
+
+  it('cifras clave, una fila por forma de pago con su porcentaje y el total', () => {
+    const text = flat(buildReportHtml({ tab: 'cobros', report: payments() }, meta))
+    expect(text).toMatch(/Cobrado \$\s?85\.000 7 cobros en el período/)
+    expect(text).toMatch(/Cobro promedio \$\s?12\.143/)
+    expect(text).toMatch(/Tarjeta 2 \$\s?50\.000 59 %/)
+    expect(text).toMatch(/Transferencia 1 \$\s?25\.000 29 %/)
+    expect(text).toMatch(/Efectivo 4 \$\s?10\.000 12 %/)
+    expect(text).toMatch(/Total 7 \$\s?85\.000 100 %/)
+  })
+
+  it('aclara qué cuenta y qué no', () => {
+    const text = flat(buildReportHtml({ tab: 'cobros', report: payments() }, meta))
+    expect(text).toMatch(/por la fecha en que se cobraron/)
+    expect(text).toMatch(/cobros anulados no suman/)
+  })
+
+  it('un solo cobro va en singular', () => {
+    const html = buildReportHtml({ tab: 'cobros', report: payments({ payments: 1, total: 500, methods: [{ method: 'cash', payments: 1, amount: 500 }] }) }, meta)
+    expect(flat(html)).toMatch(/1 cobro en el período/)
+  })
+
+  it('sin cobros lo dice en vez de imprimir tablas vacías', () => {
+    const html = buildReportHtml({ tab: 'cobros', report: payments({ payments: 0, total: 0, methods: [] }) }, meta)
+    expect(flat(html)).toMatch(/Sin cobros en este período/)
     expect(html).not.toContain('<table')
   })
 })

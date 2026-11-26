@@ -9,12 +9,13 @@ import {
 // Estado de la pantalla de reportes guardado en la URL (se puede recargar, compartir y usar "atrás").
 // Seguro para el cliente: no importa nada de servidor.
 
-export const REPORT_TABS = ['ventas', 'productos', 'cobrar'] as const
+export const REPORT_TABS = ['ventas', 'productos', 'cobros', 'cobrar'] as const
 export type ReportTab = (typeof REPORT_TABS)[number]
 
 export const REPORT_TAB_LABELS: Record<ReportTab, string> = {
   ventas: 'Ventas',
   productos: 'Productos',
+  cobros: 'Cobros',
   cobrar: 'Por cobrar',
 }
 

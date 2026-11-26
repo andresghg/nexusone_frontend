@@ -1,12 +1,12 @@
 import ExcelJS from 'exceljs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_DISPLAY_FORMAT } from '@/features/billing/types/billing'
-import type { ReceivablesReport, SalesReport, TopProductsReport } from '../types/report'
+import type { PaymentsReport, ReceivablesReport, SalesReport, TopProductsReport } from '../types/report'
 import { GET } from '../../../../app/dashboard/[slug]/finanzas/reportes/exportar/route'
 
 const { access, service } = vi.hoisted(() => ({
   access: vi.fn(),
-  service: { context: vi.fn(), sales: vi.fn(), topProducts: vi.fn(), receivables: vi.fn() },
+  service: { context: vi.fn(), sales: vi.fn(), topProducts: vi.fn(), payments: vi.fn(), receivables: vi.fn() },
 }))
 vi.mock('@/features/organization/utils/getCurrentAccess', () => ({ getCurrentAccess: access }))
 vi.mock('./ReportService', () => ({ reportService: service }))
@@ -18,6 +18,9 @@ const salesReport: SalesReport = {
   totals: { documents: 2, creditNotes: 0, invoicedTotal: 3570, invoicedSubtotal: 3000, creditedTotal: 0, creditedSubtotal: 0, netTotal: 3570, netSubtotal: 3000, netTax: 570, averageTicket: 1785, collected: 0 },
 }
 const productsReport: TopProductsReport = { range: { from: '2026-11-24', to: '2026-11-24' }, rank: 'quantity', display, products: [] }
+const paymentsReport: PaymentsReport = {
+  range: { from: '2026-11-01', to: '2026-11-24' }, display, payments: 1, total: 500, methods: [{ method: 'cash', payments: 1, amount: 500 }],
+}
 const receivablesReport: ReceivablesReport = {
   asOf: '2026-11-24', display, documents: 0, total: 0, overdueDocuments: 0, overdue: 0,
   aging: [{ bucket: 'current', documents: 0, amount: 0 }, { bucket: 'd1_30', documents: 0, amount: 0 }, { bucket: 'd31_60', documents: 0, amount: 0 }, { bucket: 'd61_90', documents: 0, amount: 0 }, { bucket: 'd90_plus', documents: 0, amount: 0 }],
@@ -33,6 +36,7 @@ beforeEach(() => {
   service.context.mockResolvedValue({ display, today: '2026-11-24' })
   service.sales.mockResolvedValue({ report: salesReport })
   service.topProducts.mockResolvedValue({ report: productsReport })
+  service.payments.mockResolvedValue({ report: paymentsReport })
   service.receivables.mockResolvedValue({ report: receivablesReport })
 })
 
@@ -65,6 +69,13 @@ describe('descarga de Excel', () => {
     expect(service.topProducts).toHaveBeenCalledWith('u1', 'org-1', { from: '2026-11-24', to: '2026-11-24', rank: 'quantity', limit: 200 })
     expect(response.headers.get('Content-Disposition')).toContain('reporte-productos_2026-11-24.xlsx')
     expect((await workbook(response)).getWorksheet('Productos')).toBeTruthy()
+  })
+
+  it('cobros: usa el período de la pantalla y descarga la hoja de cobros', async () => {
+    const response = await call('?tab=cobros&periodo=hoy')
+    expect(service.payments).toHaveBeenCalledWith('u1', 'org-1', { from: '2026-11-24', to: '2026-11-24' })
+    expect(response.headers.get('Content-Disposition')).toContain('reporte-cobros_2026-11-24.xlsx')
+    expect((await workbook(response)).getWorksheet('Cobros')).toBeTruthy()
   })
 
   it('por cobrar lleva la fecha de corte en el nombre', async () => {

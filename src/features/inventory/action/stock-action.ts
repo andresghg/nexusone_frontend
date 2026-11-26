@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getAuthUserId } from '@/lib/supabase/get-user-id'
+import { revalidateShell } from '@/lib/revalidate-shell'
 import {
   ProductHistorySchema,
   StockMovementSchema,
@@ -26,7 +27,10 @@ export async function registerMovementAction(input: StockMovementInput) {
   try {
     const { organizationId, ...movement } = data.data
     const result = await stockService.register(userId, organizationId, movement)
-    if (!result.error) revalidatePath(INVENTORY_PATH, 'page')
+    if (!result.error) {
+      revalidatePath(INVENTORY_PATH, 'page')
+      revalidateShell() // el badge de stock bajo y la campana dependen del stock
+    }
     return result
   } catch {
     return failure('No se pudo registrar el movimiento')

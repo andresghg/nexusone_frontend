@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getAuthUserId } from '@/lib/supabase/get-user-id'
+import { revalidateShell } from '@/lib/revalidate-shell'
 import {
   BulkTaxRateSchema,
   CreateProductSchema,
@@ -26,7 +27,10 @@ export async function createProductAction(input: CreateProductInput) {
   try {
     const { organizationId, initialStock, ...product } = data.data
     const result = await productService.create(userId, organizationId, product, initialStock)
-    if (!result.error) revalidatePath(INVENTORY_PATH, 'page')
+    if (!result.error) {
+      revalidatePath(INVENTORY_PATH, 'page')
+      revalidateShell() // el mínimo o el estado del producto cambian el conteo de stock bajo
+    }
     return result
   } catch {
     return { error: 'No se pudo crear el producto', success: '' }
@@ -43,7 +47,10 @@ export async function updateProductAction(input: UpdateProductInput) {
   try {
     const { organizationId, productId, ...product } = data.data
     const result = await productService.update(userId, organizationId, productId, product)
-    if (!result.error) revalidatePath(INVENTORY_PATH, 'page')
+    if (!result.error) {
+      revalidatePath(INVENTORY_PATH, 'page')
+      revalidateShell() // el mínimo o el estado del producto cambian el conteo de stock bajo
+    }
     return result
   } catch {
     return { error: 'No se pudo actualizar el producto', success: '' }
@@ -60,7 +67,10 @@ export async function setProductActiveAction(input: SetProductActiveInput) {
   try {
     const { organizationId, productId, active } = data.data
     const result = await productService.setActive(userId, organizationId, productId, active)
-    if (!result.error) revalidatePath(INVENTORY_PATH, 'page')
+    if (!result.error) {
+      revalidatePath(INVENTORY_PATH, 'page')
+      revalidateShell() // el mínimo o el estado del producto cambian el conteo de stock bajo
+    }
     return result
   } catch {
     return { error: 'No se pudo cambiar el estado del producto', success: '' }

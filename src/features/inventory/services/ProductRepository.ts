@@ -1,3 +1,4 @@
+import 'server-only'
 import { and, asc, count, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm'
 import { db } from '@/db'
 import { productCategories, products, stockMovements } from '@/db/schema'

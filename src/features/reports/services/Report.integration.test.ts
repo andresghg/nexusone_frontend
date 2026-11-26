@@ -492,6 +492,161 @@ describe.skipIf(!hasPglite)('Reportes contra Postgres real', () => {
     })
   })
 
+  describe('cobros por forma de pago', () => {
+    type Method = 'cash' | 'transfer' | 'card' | 'other'
+    const pay = async (org: string, invoiceId: string, amount: number, method: Method, when: string) => {
+      at(when)
+      const result = await invoices.addPayment(userId, org, { invoiceId, amount, method, reference: '' })
+      expect(result.error).toBe('')
+    }
+    const payments = async (org: string, from: string, to: string, permissions?: string[]) => {
+      const result = await reports(permissions).payments(userId, org, { from, to })
+      if (!('report' in result)) throw new Error(result.error)
+      return result.report
+    }
+    const cola = async (org: string) => newProduct(org, 'Cola', 1190)
+
+    it('agrupa por forma de pago, con cantidad y monto, y desempata en el orden de siempre', async () => {
+      const org = await newOrg()
+      const p = await cola(org)
+      at('2026-11-20T15:00:00Z')
+      const a = await issue(org, [productLine(p)])
+      const b = await issue(org, [productLine(p)])
+      const c = await issue(org, [productLine(p)])
+      await pay(org, a, 1190, 'cash', '2026-11-20T15:00:00Z')
+      await pay(org, b, 1000, 'transfer', '2026-11-20T16:00:00Z')
+      await pay(org, b, 190, 'transfer', '2026-11-21T16:00:00Z')
+      await pay(org, c, 500, 'card', '2026-11-21T17:00:00Z')
+
+      const report = await payments(org, '2026-11-01', '2026-11-23')
+      expect(report.methods).toEqual([
+        { method: 'cash', payments: 1, amount: 1190 }, // empata con transferencia: va primero efectivo
+        { method: 'transfer', payments: 2, amount: 1190 },
+        { method: 'card', payments: 1, amount: 500 },
+      ])
+      expect(report).toMatchObject({ payments: 4, total: 2880 })
+    })
+
+    it('un cobro anulado no cuenta, ni los cobros de un documento anulado', async () => {
+      const org = await newOrg()
+      const p = await cola(org)
+      at('2026-11-20T15:00:00Z')
+      const a = await issue(org, [productLine(p)])
+      const b = await issue(org, [productLine(p)])
+      const c = await issue(org, [productLine(p)])
+      await pay(org, a, 1190, 'cash', '2026-11-20T15:00:00Z')
+      await pay(org, b, 600, 'card', '2026-11-20T15:00:00Z')
+      await pay(org, b, 300, 'card', '2026-11-20T15:30:00Z')
+      await pay(org, c, 1190, 'transfer', '2026-11-20T15:00:00Z')
+
+      const wrong = (await q<{ id: string }>(`select id from invoice_payments where invoice_id=$1 and amount=300`, [b]))[0].id
+      expect((await invoices.voidPayment(userId, org, { paymentId: wrong, reason: 'Error de monto' })).error).toBe('')
+      expect((await invoices.voidInvoice(userId, org, { invoiceId: c, reason: 'Duplicada' })).error).toBe('')
+
+      const report = await payments(org, '2026-11-01', '2026-11-23')
+      expect(report.methods).toEqual([
+        { method: 'cash', payments: 1, amount: 1190 },
+        { method: 'card', payments: 1, amount: 600 },
+      ])
+      expect(report.total).toBe(1790)
+    })
+
+    it('cuenta el cobro en el día de la empresa: uno de las 23:30 locales cae en su día, no en el de UTC', async () => {
+      const org = await newOrg()
+      const p = await cola(org)
+      at('2026-11-20T15:00:00Z')
+      const a = await issue(org, [productLine(p, 3)])
+      await pay(org, a, 100, 'cash', '2026-11-23T02:30:00Z') // 23:30 del 22 en Santiago
+      await pay(org, a, 200, 'cash', '2026-11-23T03:30:00Z') // 00:30 del 23
+
+      expect((await payments(org, '2026-11-22', '2026-11-22')).total).toBe(100)
+      expect((await payments(org, '2026-11-23', '2026-11-23')).total).toBe(200)
+      expect((await payments(org, '2026-11-22', '2026-11-23')).total).toBe(300)
+    })
+
+    it('el rango incluye el primer y el último día completos', async () => {
+      const org = await newOrg()
+      const p = await cola(org)
+      at('2026-11-05T15:00:00Z')
+      const a = await issue(org, [productLine(p, 5)])
+      await pay(org, a, 100, 'cash', '2026-11-10T03:00:00Z') // 00:00 del 10: primer instante
+      await pay(org, a, 200, 'cash', '2026-11-11T02:59:59Z') // 23:59:59 del 10: último instante
+      await pay(org, a, 400, 'cash', '2026-11-11T03:00:00Z') // ya es el 11
+      const report = await payments(org, '2026-11-10', '2026-11-10')
+      expect(report).toMatchObject({ payments: 2, total: 300 })
+    })
+
+    it('un cobro cuenta en la fecha en que se cobró, no en la del documento', async () => {
+      const org = await newOrg()
+      const p = await cola(org)
+      at('2026-10-02T15:00:00Z')
+      const a = await issue(org, [productLine(p)]) // emitido en octubre
+      await pay(org, a, 1190, 'transfer', '2026-11-20T15:00:00Z') // cobrado en noviembre
+
+      expect((await payments(org, '2026-10-01', '2026-10-31')).total).toBe(0)
+      expect((await payments(org, '2026-11-01', '2026-11-30')).total).toBe(1190)
+    })
+
+    it('un documento emitido ya pagado deja su cobro en efectivo en el día de emisión', async () => {
+      const org = await newOrg()
+      const p = await cola(org)
+      at('2026-11-20T15:00:00Z')
+      await issue(org, [productLine(p)], { paid: true })
+      const report = await payments(org, '2026-11-20', '2026-11-20')
+      expect(report.methods).toEqual([{ method: 'cash', payments: 1, amount: 1190 }])
+    })
+
+    it('el total coincide con el "cobrado" del reporte de ventas del mismo período', async () => {
+      const org = await newOrg()
+      const p = await cola(org)
+      at('2026-11-20T15:00:00Z')
+      const a = await issue(org, [productLine(p, 2)])
+      await pay(org, a, 1000, 'cash', '2026-11-20T15:00:00Z')
+      await pay(org, a, 700, 'card', '2026-11-21T15:00:00Z')
+      const cobros = await payments(org, '2026-11-01', '2026-11-23')
+      const ventas = await sales(org, '2026-11-01', '2026-11-23')
+      expect(cobros.total).toBe(1700)
+      expect(cobros.total).toBe(ventas.totals.collected)
+    })
+
+    it('sin cobros todo queda en cero', async () => {
+      const org = await newOrg()
+      expect(await payments(org, '2026-11-01', '2026-11-23')).toMatchObject({ payments: 0, total: 0, methods: [] })
+    })
+
+    it('cada empresa ve solo sus cobros', async () => {
+      const a = await newOrg()
+      const b = await newOrg()
+      const pa = await cola(a)
+      const pb = await cola(b)
+      at('2026-11-20T15:00:00Z')
+      const ia = await issue(a, [productLine(pa)])
+      const ib = await issue(b, [productLine(pb, 2)])
+      await pay(a, ia, 1190, 'cash', '2026-11-20T15:00:00Z')
+      await pay(b, ib, 2380, 'card', '2026-11-20T15:00:00Z')
+      expect((await payments(a, '2026-11-01', '2026-11-23')).methods).toEqual([{ method: 'cash', payments: 1, amount: 1190 }])
+      expect((await payments(b, '2026-11-01', '2026-11-23')).methods).toEqual([{ method: 'card', payments: 1, amount: 2380 }])
+    })
+
+    it('exige el permiso de reportes', async () => {
+      const org = await newOrg()
+      const result = await reports(['pos.facturacion.read']).payments(userId, org, { from: '2026-11-01', to: '2026-11-23' })
+      expect(result).toEqual({ error: 'No tienes permisos para ver los reportes' })
+    })
+
+    it('usa los decimales de la moneda de la empresa', async () => {
+      const org = await newOrg()
+      const p = await cola(org)
+      at('2026-11-20T15:00:00Z')
+      const a = await issue(org, [productLine(p, 3)])
+      await pay(org, a, 1, 'cash', '2026-11-20T15:00:00Z')
+      await pay(org, a, 2, 'cash', '2026-11-20T15:10:00Z')
+      const report = await payments(org, '2026-11-20', '2026-11-20')
+      expect(report.display).toMatchObject({ currency: 'CLP', currencyDecimals: 0 })
+      expect(report.total).toBe(3)
+    })
+  })
+
   describe('panel de inicio', () => {
     it('calcula hoy, ayer, la semana, el mes y lo que se debe con datos reales', async () => {
       const org = await newOrg()

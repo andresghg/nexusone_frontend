@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getAuthUserId } from '@/lib/supabase/get-user-id'
+import { revalidateShell } from '@/lib/revalidate-shell'
 import {
   AddPaymentActionSchema,
   IssueCreditNoteActionSchema,
@@ -41,6 +42,7 @@ export async function issueInvoiceAction(
 
     // Emitir descuenta stock: se refrescan la lista de documentos y el inventario
     revalidatePath(INVOICES_PATH, 'page')
+    revalidateShell() // la campana de notificaciones depende de cobros y stock
     revalidatePath(INVENTORY_PATH, 'page')
     return { error: '', success: result.success, invoice: result.invoice }
   } catch {
@@ -79,6 +81,7 @@ export async function voidInvoiceAction(input: VoidInvoiceActionInput) {
 
     // Anular devuelve stock: se refrescan la lista de documentos, su detalle y el inventario
     revalidatePath(INVOICES_PATH, 'page')
+    revalidateShell()
     revalidatePath(DETAIL_PATH, 'page')
     revalidatePath(INVENTORY_PATH, 'page')
     return { error: '', success: result.success }
@@ -100,6 +103,7 @@ export async function addPaymentAction(input: AddPaymentActionInput) {
     if (result.error) return failure(result.error)
 
     revalidatePath(INVOICES_PATH, 'page') // cambia el estado de cobro que muestra la lista
+    revalidateShell()
     revalidatePath(DETAIL_PATH, 'page')
     return { error: '', success: result.success }
   } catch {
@@ -120,6 +124,7 @@ export async function voidPaymentAction(input: VoidPaymentActionInput) {
     if (result.error) return failure(result.error)
 
     revalidatePath(INVOICES_PATH, 'page')
+    revalidateShell()
     revalidatePath(DETAIL_PATH, 'page')
     return { error: '', success: result.success }
   } catch {
@@ -143,6 +148,7 @@ export async function issueCreditNoteAction(
 
     // La nota cambia el saldo del documento y puede devolver stock: se refrescan lista, detalle e inventario
     revalidatePath(INVOICES_PATH, 'page')
+    revalidateShell()
     revalidatePath(DETAIL_PATH, 'page')
     revalidatePath(INVENTORY_PATH, 'page')
     return { error: '', success: result.success, creditNote: result.creditNote }

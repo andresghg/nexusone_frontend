@@ -6,6 +6,8 @@ import { organizationRepository } from '@/features/organization/services/Organiz
 import { organizationService } from '@/features/organization/services/OrganizationService'
 import { productService } from '@/features/inventory/services/ProductService'
 import { profileService } from '@/features/profile/services/ProfileService'
+import { notificationService } from '@/features/notifications/services/NotificationService'
+import { buildNotifications } from '@/features/notifications/utils/buildNotifications'
 import type { CurrentUser } from '@/shared/types/CurrentUser'
 
 export default async function OrganizationLayout({
@@ -27,11 +29,13 @@ export default async function OrganizationLayout({
     profile,
     creation,
     lowStockCount,
+    due,
   ] = await Promise.all([
     organizationRepository.findAllByUserId(user.id),
     profileService.getByUserId(user.id),
     organizationService.getCreationStatus(user.id),
     productService.getLowStockCount(user.id, organization.id),
+    notificationService.dueSummary(user.id, organization.id),
   ])
 
   const currentUser: CurrentUser = {
@@ -45,6 +49,9 @@ export default async function OrganizationLayout({
     roleLabel: ROLE_LABEL[organization.role] ?? organization.role,
   }
 
+  // Avisos de la campana: derivados del estado actual (vencidas, por vencer, stock bajo)
+  const notifications = buildNotifications({ basePath: `/dashboard/${slug}`, lowStockCount, due })
+
   return (
     <DashboardShell
       slug={slug}
@@ -57,6 +64,7 @@ export default async function OrganizationLayout({
       canCreateOrganization={creation.allowed}
       currentUser={currentUser}
       lowStockCount={lowStockCount}
+      notifications={notifications}
     >
       {children}
     </DashboardShell>

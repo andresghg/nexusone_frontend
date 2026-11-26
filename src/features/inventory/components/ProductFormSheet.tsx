@@ -40,6 +40,16 @@ type Props = {
   organizationId: string
   categories: CategoryRow[]
   product: ProductRow | null // null = crear
+  currency: string // código ISO de la moneda de la empresa (CLP, USD…): precio y costo se escriben en ella
+}
+
+// La moneda va en la etiqueta: se ve al escribir y el lector de pantalla la anuncia con el campo
+function withCurrency(label: string, currency: string) {
+  return (
+    <>
+      {label} <span className="font-normal text-muted-foreground">({currency})</span>
+    </>
+  )
 }
 
 function Field({
@@ -49,7 +59,7 @@ function Field({
   hint,
   children,
 }: {
-  label: string
+  label: ReactNode
   htmlFor: string
   error?: string
   hint?: string
@@ -70,7 +80,7 @@ function Field({
   )
 }
 
-export function ProductFormSheet({ open, onOpenChange, organizationId, categories, product }: Props) {
+export function ProductFormSheet({ open, onOpenChange, organizationId, categories, product, currency }: Props) {
   const isEdit = !!product
 
   const {
@@ -179,7 +189,7 @@ export function ProductFormSheet({ open, onOpenChange, organizationId, categorie
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Precio de venta" htmlFor="price" error={errors.price?.message}>
+              <Field label={withCurrency('Precio de venta', currency)} htmlFor="price" error={errors.price?.message}>
                 <Input
                   id="price"
                   type="number"
@@ -189,7 +199,7 @@ export function ProductFormSheet({ open, onOpenChange, organizationId, categorie
                   {...register('price', { valueAsNumber: true })}
                 />
               </Field>
-              <Field label="Costo" htmlFor="cost" error={errors.cost?.message}>
+              <Field label={withCurrency('Costo', currency)} htmlFor="cost" error={errors.cost?.message}>
                 <Input
                   id="cost"
                   type="number"

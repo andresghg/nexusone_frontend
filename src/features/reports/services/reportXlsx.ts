@@ -1,6 +1,9 @@
+import 'server-only'
 import ExcelJS from 'exceljs'
+import { PAYMENT_METHOD_LABELS } from '@/features/billing/types/billing'
 import {
   AGING_LABELS,
+  type PaymentsReport,
   type ReceivablesReport,
   type ReportExport,
   type ReportExportMeta,
@@ -163,6 +166,43 @@ function products(workbook: ExcelJS.Workbook, report: TopProductsReport, meta: R
   if (report.products.length > 0) sheet.autoFilter = { from: { row: headerRow, column: 1 }, to: { row: headerRow + report.products.length, column: 7 } }
 }
 
+function payments(workbook: ExcelJS.Workbook, report: PaymentsReport, meta: ReportExportMeta) {
+  const { display, range } = report
+  const money = moneyFormat(display.currencyDecimals)
+  const sheet = workbook.addWorksheet('Cobros')
+  heading(
+    sheet,
+    'Cobros por forma de pago',
+    [
+      meta.companyName,
+      `Período: ${range.from} al ${range.to}`,
+      `Moneda: ${display.currency} · Cobros vigentes por fecha de cobro; las devoluciones de dinero no se descuentan`,
+      `Generado: ${stamp(meta, display)}`,
+    ],
+  )
+  const headerRow = tableHeader(sheet, ['Forma de pago', 'Cobros', 'Monto', '% del total'], ['left', 'right', 'right', 'right'])
+  for (const method of report.methods) {
+    const row = sheet.addRow([PAYMENT_METHOD_LABELS[method.method], method.payments, method.amount, report.total > 0 ? method.amount / report.total : 0])
+    row.getCell(2).numFmt = '#,##0'
+    row.getCell(3).numFmt = money
+    row.getCell(4).numFmt = '0.0%'
+  }
+
+  const first = headerRow + 1
+  const last = headerRow + report.methods.length
+  const total = sheet.addRow(['Total'])
+  total.font = BOLD
+  const sums: [number, number][] = [[2, report.payments], [3, report.total], [4, report.total > 0 ? 1 : 0]]
+  for (const [col, result] of sums) {
+    const letter = sheet.getColumn(col).letter
+    total.getCell(col).value = report.methods.length > 0 ? { formula: `SUM(${letter}${first}:${letter}${last})`, result } : result
+    total.getCell(col).numFmt = col === 2 ? '#,##0' : col === 3 ? money : '0.0%'
+  }
+  total.eachCell((cell) => (cell.border = { top: { style: 'thin' } }))
+
+  setup(sheet, [24, 12, 20, 14])
+}
+
 function receivables(workbook: ExcelJS.Workbook, report: ReceivablesReport, meta: ReportExportMeta) {
   const { display, asOf } = report
   const money = moneyFormat(display.currencyDecimals)
@@ -209,10 +249,16 @@ export async function buildReportWorkbook(data: ReportExport, meta: ReportExport
   const workbook = new ExcelJS.Workbook()
   workbook.creator = meta.companyName
   workbook.created = meta.generatedAt
-  workbook.title = data.tab === 'ventas' ? 'Reporte de ventas' : data.tab === 'productos' ? 'Productos más vendidos' : 'Cuentas por cobrar'
+  workbook.title = {
+    ventas: 'Reporte de ventas',
+    productos: 'Productos más vendidos',
+    cobros: 'Cobros por forma de pago',
+    cobrar: 'Cuentas por cobrar',
+  }[data.tab]
 
   if (data.tab === 'ventas') sales(workbook, data.report, meta)
   else if (data.tab === 'productos') products(workbook, data.report, meta)
+  else if (data.tab === 'cobros') payments(workbook, data.report, meta)
   else receivables(workbook, data.report, meta)
 
   return Buffer.from(await workbook.xlsx.writeBuffer())

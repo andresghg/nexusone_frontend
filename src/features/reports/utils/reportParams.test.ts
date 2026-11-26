@@ -11,6 +11,7 @@ describe('parseReportParams', () => {
       tab: 'productos', period: '30d', from: '', to: '', rank: 'cantidad',
     })
     expect(parseReportParams({ tab: 'cobrar' }).tab).toBe('cobrar')
+    expect(parseReportParams({ tab: 'cobros', periodo: '7d' })).toMatchObject({ tab: 'cobros', period: '7d' })
     expect(parseReportParams({ periodo: 'personalizado', desde: '2026-11-01', hasta: '2026-11-15' })).toMatchObject({
       period: 'personalizado', from: '2026-11-01', to: '2026-11-15',
     })

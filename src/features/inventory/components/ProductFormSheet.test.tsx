@@ -30,12 +30,13 @@ const setup = (product: ProductRow | null = null) => {
   const onOpenChange = vi.fn()
   const user = userEvent.setup({ pointerEventsCheck: 0 })
   render(
-    <ProductFormSheet open onOpenChange={onOpenChange} organizationId={ORG} categories={categories} product={product} />,
+    <ProductFormSheet open onOpenChange={onOpenChange} organizationId={ORG} categories={categories} product={product} currency="CLP" />,
   )
   return { user, onOpenChange }
 }
 
-const field = (label: string) => screen.getByLabelText(label) as HTMLInputElement
+// Precio y costo llevan la moneda en la etiqueta ("Precio de venta (CLP)"): se busca por el comienzo
+const field = (label: string) => screen.getByLabelText(new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`)) as HTMLInputElement
 const fill = async (user: ReturnType<typeof userEvent.setup>, label: string, value: string) => {
   await user.clear(field(label))
   await user.type(field(label), value)
@@ -235,5 +236,22 @@ describe('ProductFormSheet · editar', () => {
     )
     expect(create).not.toHaveBeenCalled()
     expect(toast.success).toHaveBeenCalledWith('Producto actualizado')
+  })
+})
+
+describe('ProductFormSheet · moneda', () => {
+  it('precio y costo muestran la moneda de la empresa en su etiqueta', () => {
+    setup()
+    expect(screen.getByLabelText('Precio de venta (CLP)')).toBeTruthy()
+    expect(screen.getByLabelText('Costo (CLP)')).toBeTruthy()
+  })
+
+  it('usa la moneda que recibe, no una fija', () => {
+    render(
+      <ProductFormSheet open onOpenChange={vi.fn()} organizationId={ORG} categories={categories} product={null} currency="USD" />,
+    )
+    expect(screen.getByLabelText('Precio de venta (USD)')).toBeTruthy()
+    expect(screen.getByLabelText('Costo (USD)')).toBeTruthy()
+    expect(screen.queryByLabelText('Precio de venta (CLP)')).toBeNull()
   })
 })

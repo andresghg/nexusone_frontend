@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_DISPLAY_FORMAT } from '@/features/billing/types/billing'
-import type { ReceivablesReport, SalesReport, TopProductsReport } from '../types/report'
+import type { PaymentsReport, ReceivablesReport, SalesReport, TopProductsReport } from '../types/report'
 import { parseReportParams } from '../utils/reportParams'
 import { loadReport } from './loadReport'
 import type { ReportService } from './ReportService'
@@ -8,11 +8,12 @@ import type { ReportService } from './ReportService'
 const display = DEFAULT_DISPLAY_FORMAT
 const today = '2026-11-23'
 
-function fake(over: { context?: unknown; sales?: unknown; products?: unknown; receivables?: unknown } = {}) {
+function fake(over: { context?: unknown; sales?: unknown; products?: unknown; payments?: unknown; receivables?: unknown } = {}) {
   const service = {
     context: vi.fn().mockResolvedValue('context' in over ? over.context : { display, today }),
     sales: vi.fn().mockResolvedValue(over.sales ?? { report: { tag: 'ventas' } as unknown as SalesReport }),
     topProducts: vi.fn().mockResolvedValue(over.products ?? { report: { tag: 'productos' } as unknown as TopProductsReport }),
+    payments: vi.fn().mockResolvedValue(over.payments ?? { report: { tag: 'cobros' } as unknown as PaymentsReport }),
     receivables: vi.fn().mockResolvedValue(over.receivables ?? { report: { tag: 'cobrar' } as unknown as ReceivablesReport }),
   }
   return { service, run: (params: Record<string, string>, limit = 20) => loadReport('u1', 'org-1', parseReportParams(params), { productLimit: limit }, service as unknown as ReportService) }
@@ -34,6 +35,24 @@ describe('loadReport', () => {
     expect(service.topProducts).toHaveBeenCalledWith('u1', 'org-1', { from: today, to: today, rank: 'quantity', limit: 200 })
     await run({ tab: 'productos' }, 20)
     expect(service.topProducts.mock.calls[1][2]).toMatchObject({ rank: 'revenue', limit: 20 })
+  })
+
+  it('cobros: consulta el período resuelto y solo esa pestaña', async () => {
+    const { service, run } = fake()
+    const result = await run({ tab: 'cobros', periodo: '7d' })
+    expect(service.payments).toHaveBeenCalledWith('u1', 'org-1', { from: '2026-11-17', to: '2026-11-23' })
+    expect(result).toMatchObject({ status: 'ok', range: { from: '2026-11-17', to: '2026-11-23' }, data: { tab: 'cobros' } })
+    expect(service.sales).not.toHaveBeenCalled()
+    expect(service.topProducts).not.toHaveBeenCalled()
+    expect(service.receivables).not.toHaveBeenCalled()
+  })
+
+  it('cobros con un período personalizado inválido no consulta y lo dice', async () => {
+    const { service, run } = fake()
+    const result = await run({ tab: 'cobros', periodo: 'personalizado', desde: '2026-11-30', hasta: '2026-11-01' })
+    expect(result.status).toBe('invalid')
+    expect(result.data).toEqual({ tab: 'cobros', error: 'La fecha de inicio no puede ser posterior a la de término' })
+    expect(service.payments).not.toHaveBeenCalled()
   })
 
   it('por cobrar no usa período, ni siquiera uno inválido', async () => {
@@ -64,9 +83,10 @@ describe('loadReport', () => {
   })
 
   it('un error del servicio se entrega tal cual, en la pestaña pedida', async () => {
-    const { run } = fake({ sales: { error: 'boom' }, products: { error: 'p' }, receivables: { error: 'r' } })
+    const { run } = fake({ sales: { error: 'boom' }, products: { error: 'p' }, payments: { error: 'c' }, receivables: { error: 'r' } })
     expect((await run({})).data).toEqual({ tab: 'ventas', error: 'boom' })
     expect((await run({ tab: 'productos' })).data).toEqual({ tab: 'productos', error: 'p' })
+    expect((await run({ tab: 'cobros' })).data).toEqual({ tab: 'cobros', error: 'c' })
     expect((await run({ tab: 'cobrar' })).data).toEqual({ tab: 'cobrar', error: 'r' })
   })
 })

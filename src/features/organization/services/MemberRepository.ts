@@ -1,3 +1,4 @@
+import 'server-only'
 import { and, eq, inArray } from 'drizzle-orm'
 import { pgSchema, text, uuid } from 'drizzle-orm/pg-core'
 import { db } from '@/db'
