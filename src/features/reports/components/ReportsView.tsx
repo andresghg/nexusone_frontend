@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/shared/components/ui/tabs'
 import { ToggleGroup, ToggleGroupItem } from '@/shared/components/ui/toggle-group'
 import type { DisplayFormat } from '@/features/billing/types/billing'
-import type { DateRange, ReceivablesReport, SalesReport, TopProductsReport } from '../types/report'
+import type { DateRange, ReportData } from '../types/report'
 import { calendarDate } from '../utils/reportFormat'
 import {
   buildReportsQuery,
@@ -22,16 +22,10 @@ import {
   type ReportTab,
 } from '../utils/reportParams'
 import { rangeError } from '../utils/reportRange'
+import { ExportMenu } from './ExportMenu'
 import { ProductsTab } from './ProductsTab'
 import { ReceivablesTab } from './ReceivablesTab'
 import { SalesTab } from './SalesTab'
-
-// Lo que el servidor ya consultó para la pestaña activa (solo se consulta esa, no las tres)
-export type ReportData =
-  | { tab: 'ventas'; report: SalesReport }
-  | { tab: 'productos'; report: TopProductsReport }
-  | { tab: 'cobrar'; report: ReceivablesReport }
-  | { tab: ReportTab; error: string }
 
 type Props = {
   query: ReportsQuery
@@ -39,9 +33,11 @@ type Props = {
   today: string
   display: DisplayFormat
   data: ReportData
+  companyName: string // para el encabezado de lo que se imprime o descarga
+  print?: (html: string) => void
 }
 
-export function ReportsView({ query, range, today, display, data }: Props) {
+export function ReportsView({ query, range, today, display, data, companyName, print }: Props) {
   const router = useRouter()
   const pathname = usePathname()
   const [pending, startTransition] = useTransition()
@@ -77,11 +73,19 @@ export function ReportsView({ query, range, today, display, data }: Props) {
 
   return (
     <div className="space-y-6">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Reportes</h1>
-        <p className="text-sm text-muted-foreground">
-          Ventas, productos y cuentas por cobrar de tu empresa. Los montos están en {display.currency}.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-semibold tracking-tight">Reportes</h1>
+          <p className="text-sm text-muted-foreground">
+            Ventas, productos y cuentas por cobrar de tu empresa. Los montos están en {display.currency}.
+          </p>
+        </div>
+        <ExportMenu
+          data={data}
+          companyName={companyName}
+          excelHref={`${pathname}/exportar${buildReportsQuery(query)}`}
+          print={print}
+        />
       </header>
 
       <Tabs value={query.tab} onValueChange={(tab) => navigate({ tab: tab as ReportTab })} className="space-y-4">

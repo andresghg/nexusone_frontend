@@ -107,3 +107,15 @@ export type DashboardSummary = {
   month: { netTotal: number; documents: number; averageTicket: number } // del día 1 a hoy
   receivables: { total: number; overdue: number }
 }
+
+// Lo que se exporta (a Excel o a PDF): el reporte de una pestaña. Vive aquí, y no junto al generador de Excel,
+// para que el navegador pueda usarlo sin traer la librería de planillas.
+export type ReportExport =
+  | { tab: 'ventas'; report: SalesReport }
+  | { tab: 'productos'; report: TopProductsReport }
+  | { tab: 'cobrar'; report: ReceivablesReport }
+
+export type ReportExportMeta = { companyName: string; generatedAt: Date }
+
+// Lo que muestra la pantalla de una pestaña: el reporte, o el motivo por el que no hay reporte.
+export type ReportData = ReportExport | { tab: 'ventas' | 'productos' | 'cobrar'; error: string }

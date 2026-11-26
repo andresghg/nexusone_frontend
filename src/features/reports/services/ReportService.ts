@@ -18,7 +18,7 @@ import { fromMinorUnits } from '@/features/billing/utils/minorUnits'
 import { reportRepository, type IReportRepository } from './ReportRepository'
 
 export const TOP_PRODUCTS_DEFAULT = 10
-export const TOP_PRODUCTS_MAX = 50
+export const TOP_PRODUCTS_MAX = 200 // la pantalla muestra 20; la descarga a Excel trae hasta 200
 export const DEBTORS_LIMIT = 10
 const NO_ACCESS = 'No tienes permisos para ver los reportes'
 const WALK_IN = 'Consumidor final'

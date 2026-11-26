@@ -25,7 +25,11 @@ import { invoiceRepository } from '@/features/billing/services/InvoiceRepository
 import { InvoiceService } from '@/features/billing/services/InvoiceService'
 import { DEFAULT_BILLING_SETTINGS, type BillingSettings } from '@/features/billing/types/billing'
 import { customerRepository } from '@/features/customers/services/CustomerRepository'
+import ExcelJS from 'exceljs'
+import { loadReport } from './loadReport'
+import { buildReportWorkbook } from './reportXlsx'
 import { reportRepository } from './ReportRepository'
+import { parseReportParams } from '../utils/reportParams'
 import { ReportService } from './ReportService'
 
 const sqlFile = hasPglite
@@ -519,6 +523,80 @@ describe.skipIf(!hasPglite)('Reportes contra Postgres real', () => {
       expect(await reports(['pos.facturacion.read']).dashboard(userId, org)).toMatchObject({
         today: { netTotal: 0, documents: 0 }, month: { documents: 0, averageTicket: 0 }, receivables: { total: 0, overdue: 0 },
       })
+    })
+  })
+
+  describe('exportación a Excel con datos reales', () => {
+    async function exported(org: string, params: Record<string, string>) {
+      const loaded = await loadReport(userId, org, parseReportParams(params), { productLimit: 200 }, reports())
+      if ('error' in loaded.data) throw new Error(loaded.data.error)
+      const buffer = await buildReportWorkbook(loaded.data, { companyName: 'Acme SpA', generatedAt: clock })
+      const book = new ExcelJS.Workbook()
+      await book.xlsx.load(buffer as unknown as ExcelJS.Buffer)
+      return { book, loaded }
+    }
+    const rowWith = (sheet: ExcelJS.Worksheet, first: unknown) => {
+      let found: ExcelJS.Row | undefined
+      sheet.eachRow((row) => {
+        if (!found && row.getCell(1).value === first) found = row
+      })
+      return found!
+    }
+
+    it('las ventas descargadas cuadran con las de la pantalla, devoluciones incluidas', async () => {
+      const org = await newOrg()
+      const cola = await newProduct(org, 'Cola', 1190)
+      at('2026-11-20T15:00:00Z')
+      const inv = await issue(org, [productLine(cola, 2)])
+      at('2026-11-22T15:00:00Z')
+      await credit(org, inv, [{ itemId: await itemOf(inv), quantity: 1 }])
+      at('2026-11-23T15:00:00Z')
+
+      const { book, loaded } = await exported(org, { periodo: 'personalizado', desde: '2026-11-20', hasta: '2026-11-23' })
+      const sheet = book.getWorksheet('Ventas')!
+      expect(loaded.data.tab === 'ventas' && 'report' in loaded.data && loaded.data.report.totals.netTotal).toBe(1190)
+      expect(rowWith(sheet, 'Ventas netas (con impuesto)').getCell(2).value).toBe(1190)
+      expect(rowWith(sheet, 'Neto sin impuesto').getCell(2).value).toBe(1000)
+      const header = rowWith(sheet, 'Día')
+      const rows = [1, 2].map((n) => sheet.getRow(header.number + n))
+      expect(rows.map((r) => (r.getCell(1).value as Date).toISOString().slice(0, 10))).toEqual(['2026-11-20', '2026-11-22'])
+      expect(rows.map((r) => r.getCell(8).value)).toEqual([2380, -1190]) // el día de la devolución en negativo
+      expect(rowWith(sheet, 'Total').getCell(8).value).toEqual({ formula: `SUM(H${header.number + 1}:H${header.number + 2})`, result: 1190 })
+    })
+
+    it('los productos descargados descuentan lo acreditado y traen más que la pantalla', async () => {
+      const org = await newOrg()
+      const cola = await newProduct(org, 'Cola', 1190)
+      at('2026-11-20T15:00:00Z')
+      const inv = await issue(org, [productLine(cola, 3)])
+      at('2026-11-21T15:00:00Z')
+      await credit(org, inv, [{ itemId: await itemOf(inv), quantity: 1 }])
+      at('2026-11-23T15:00:00Z')
+      const { book } = await exported(org, { tab: 'productos', periodo: 'personalizado', desde: '2026-11-20', hasta: '2026-11-23' })
+      const sheet = book.getWorksheet('Productos')!
+      expect(sheet.getRow(rowWith(sheet, 'N°').number + 1).values).toEqual([undefined, 1, 'Cola', 'SKU-COLA', 'un', 2, 2380, 2000])
+    })
+
+    it('por cobrar descargado cuadra con las deudas reales', async () => {
+      const org = await newOrg()
+      const cola = await newProduct(org, 'Cola', 1190)
+      const ana = await newCustomer(org, 'Ana Pérez')
+      at('2026-11-01T15:00:00Z')
+      const doc = await issue(org, [productLine(cola, 2)], { customerId: ana })
+      await setDue(doc, '2026-11-13')
+      at('2026-11-23T15:00:00Z')
+      const { book } = await exported(org, { tab: 'cobrar' })
+      const sheet = book.getWorksheet('Por cobrar')!
+      expect(rowWith(sheet, 'Por cobrar').getCell(2).value).toBe(2380)
+      expect(rowWith(sheet, 'Vencido').getCell(2).value).toBe(2380)
+      expect(rowWith(sheet, '1 a 30 días de atraso').values).toEqual([undefined, '1 a 30 días de atraso', 1, 2380])
+      expect(rowWith(sheet, 'Ana Pérez').getCell(3).value).toBe(2380)
+    })
+
+    it('sin permiso de reportes no se genera nada', async () => {
+      const org = await newOrg()
+      const loaded = await loadReport(userId, org, parseReportParams({}), { productLimit: 200 }, reports(['pos.facturacion.read']))
+      expect(loaded.status).toBe('forbidden')
     })
   })
 })

@@ -4,9 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReportsQuery } from '../utils/reportParams'
 import { display, productsReport, receivablesReport, salesReport } from './fixtures.test-util'
-import { ReportsView, type ReportData } from './ReportsView'
+import type { ReportData } from '../types/report'
+import { ReportsView } from './ReportsView'
 
 const { push } = vi.hoisted(() => ({ push: vi.fn() }))
+const print = vi.fn()
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
   usePathname: () => '/dashboard/acme/finanzas/reportes',
@@ -26,13 +28,16 @@ const setup = ({ query = {}, data, range = { from: '2026-11-01', to: '2026-11-23
         ? { tab: 'cobrar', report: receivablesReport() }
         : { tab: 'ventas', report: salesReport() })
   const user = userEvent.setup({ pointerEventsCheck: 0, delay: null })
-  render(<ReportsView query={q} range={range} today="2026-11-23" display={display} data={content} />)
+  render(<ReportsView query={q} range={range} today="2026-11-23" display={display} data={content} companyName="Acme SpA" print={print} />)
   return { user }
 }
 const tab = (name: string) => screen.getByRole('tab', { name })
 const period = () => screen.getByRole('combobox', { name: 'Período' })
 
-beforeEach(() => push.mockClear())
+beforeEach(() => {
+  push.mockClear()
+  print.mockClear()
+})
 afterEach(cleanup)
 
 describe('ReportsView · estructura', () => {
@@ -242,5 +247,41 @@ describe('ReportsView · errores', () => {
   it('un error de permisos también', () => {
     setup({ query: { tab: 'cobrar' }, data: { tab: 'cobrar', error: 'No tienes permisos para ver los reportes' } })
     expect(within(screen.getByRole('tabpanel')).getByRole('alert').textContent).toBe('No tienes permisos para ver los reportes')
+  })
+})
+
+describe('ReportsView · exportar', () => {
+  const excel = async (over: Over) => {
+    const { user } = setup(over)
+    await user.click(screen.getByRole('button', { name: 'Exportar' }))
+    return (await screen.findByRole('menuitem', { name: 'Descargar Excel (.xlsx)' })).getAttribute('href')
+  }
+
+  it('la descarga lleva lo mismo que se está viendo', async () => {
+    expect(await excel({})).toBe(`${PATH}/exportar`)
+    cleanup()
+    expect(await excel({ query: { tab: 'productos', period: '30d', rank: 'cantidad' } })).toBe(`${PATH}/exportar?tab=productos&periodo=30d&orden=cantidad`)
+  })
+
+  it('un período personalizado viaja con sus fechas', async () => {
+    expect(
+      await excel({ query: { period: 'personalizado', from: '2026-11-01', to: '2026-11-15' }, range: { from: '2026-11-01', to: '2026-11-15' } }),
+    ).toBe(`${PATH}/exportar?periodo=personalizado&desde=2026-11-01&hasta=2026-11-15`)
+  })
+
+  it('por cobrar no arrastra un período que no usa', async () => {
+    expect(await excel({ query: { tab: 'cobrar' } })).toBe(`${PATH}/exportar?tab=cobrar`)
+  })
+
+  it('imprimir manda el reporte de la pestaña activa con el nombre de la empresa', async () => {
+    const { user } = setup({ query: { tab: 'cobrar' } })
+    await user.click(screen.getByRole('button', { name: 'Exportar' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Imprimir o guardar como PDF' }))
+    expect(print.mock.calls[0][0]).toContain('<title>Cuentas por cobrar — Acme SpA</title>')
+  })
+
+  it('con un error en pantalla no se puede exportar', () => {
+    setup({ data: { tab: 'ventas', error: 'x' } })
+    expect((screen.getByRole('button', { name: 'Exportar' }) as HTMLButtonElement).disabled).toBe(true)
   })
 })
